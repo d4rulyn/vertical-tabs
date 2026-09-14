@@ -1,0 +1,28 @@
+# Playwright runs ONLY inside this container. Never install Node/Playwright on the host.
+#
+#   cd <repo>
+#   HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose -f tests/docker-compose.yml build
+#   HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose -f tests/docker-compose.yml run --rm e2e npm run unit
+#   HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose -f tests/docker-compose.yml run --rm e2e
+#
+# `user:` keeps everything written to tests/output/ owned by the host user on WSL2.
+services:
+  e2e:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile
+    image: vertical-tabs-e2e:1.62.1
+    init: true
+    ipc: host
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    working_dir: /work/tests
+    environment:
+      HOME: /tmp
+      EXT_DIR: /work/extension
+      OUT_DIR: /work/tests/output
+      # Chromium's own sandbox is redundant inside the container and is not
+      # available to the non-root user; the probe ran with it disabled too.
+      VT_CHROMIUM_NO_SANDBOX: "1"
+    volumes:
+      - ..:/work
+    command: ["playwright", "test"]

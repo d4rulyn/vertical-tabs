@@ -1,0 +1,14 @@
+{
+  "name": "vertical-tabs-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright end-to-end and Node unit tests for the Vertical Tabs with Previews extension. Runs inside mcr.microsoft.com/playwright:v1.62.1-noble only.",
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' playwright test --project=headed",
+    "unit": "node --test unit/*.test.mjs"
+  }
+}

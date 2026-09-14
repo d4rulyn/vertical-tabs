@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>縦タブの次の一手</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Old+Mincho:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* ── tokens ─────────────────────────────────────────────────────────────
+     Light is the base set. Dark redefines only these values, twice: once for
+     the OS preference (guarded so an explicit light choice still wins) and
+     once for the explicit dark stamp.                                      */
+  :root {
+    color-scheme: light;
+
+    --ground:   #f2f4f7;
+    --surface:  #ffffff;
+    --sunken:   #eceff4;
+    --line:     #d7dce4;
+    --hairline: #e6e9ef;
+
+    --ink:      #14181e;
+    --ink-soft: #4a5566;
+    --ink-mute: #737f92;
+
+    --accent:      #1c46b8;
+    --accent-soft: #e8eeff;
+
+    /* Chrome's own tab-group palette. The stripe on each option is a real
+       tab-group colour, not a decorative hue. */
+    --g-blue:   #1a73e8;
+    --g-green:  #1e8e3e;
+    --g-yellow: #b06000;
+    --g-purple: #8430ce;
+    --g-cyan:   #00707a;
+
+    --shadow: 0 1px 2px rgba(20, 24, 30, .06), 0 8px 24px -16px rgba(20, 24, 30, .28);
+
+    --jp: "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, system-ui, sans-serif;
+    --display: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+
+      --ground:   #101317;
+      --surface:  #191d23;
+      --sunken:   #14181d;
+      --line:     #2b323b;
+      --hairline: #242a32;
+
+      --ink:      #e7ebf1;
+      --ink-soft: #a8b3c2;
+      --ink-mute: #7c8899;
+
+      --accent:      #8fb4ff;
+      --accent-soft: #1b2540;
+
+      --g-blue:   #8ab4f8;
+      --g-green:  #81c995;
+      --g-yellow: #fdd663;
+      --g-purple: #d7aefb;
+      --g-cyan:   #78d9ec;
+
+      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -18px rgba(0, 0, 0, .9);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --ground:   #101317;
+    --surface:  #191d23;
+    --sunken:   #14181d;
+    --line:     #2b323b;
+    --hairline: #242a32;
+
+    --ink:      #e7ebf1;
+    --ink-soft: #a8b3c2;
+    --ink-mute: #7c8899;
+
+    --accent:      #8fb4ff;
+    --accent-soft: #1b2540;
+
+    --g-blue:   #8ab4f8;
+    --g-green:  #81c995;
+    --g-yellow: #fdd663;
+    --g-purple: #d7aefb;
+    --g-cyan:   #78d9ec;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -18px rgba(0, 0, 0, .9);
+  }
+
+  /* ── base ───────────────────────────────────────────────────────────── */
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--jp);
+    font-size: 15px;
+    line-height: 1.85;
+    font-feature-settings: "palt" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 54rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 4vw, 2.5rem) 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2.5rem, 5vw, 4rem);
+  }
+
+  a { color: var(--accent); text-underline-offset: .2em; }
+  code, .path { font-family: var(--mono); font-size: .86em; }
+
+  .path {
+    color: var(--ink-soft);
+    background: var(--sunken);
+    border: 1px solid var(--hairline);
+    border-radius: 3px;
+    padding: .08em .38em;
+    white-space: nowrap;
+  }
+
+  /* ── head ───────────────────────────────────────────────────────────── */
+  .eyebrow {
+    margin: 0 0 .9rem;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    color: var(--ink-mute);
+  }
+
+  h1 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(2rem, 5.5vw, 3.1rem);
+    line-height: 1.28;
+    letter-spacing: .01em;
+    text-wrap: balance;
+  }
+
+  .lede {
+    margin: 1.2rem 0 0;
+    max-width: 36em;
+    font-size: 1.03rem;
+    color: var(--ink-soft);
+  }
+  .lede strong { color: var(--ink); font-weight: 700; }
+
+  .facts {
+    margin: 2rem 0 0;
+    padding: 1rem 1.25rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    gap: 1rem 1.75rem;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+  }
+  .facts div { display: flex; flex-direction: column; gap: .1rem; }
+  .facts dt {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    color: var(--ink-mute);
+  }
+  .facts dd {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: .95rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+
+  /* ── section headings ───────────────────────────────────────────────── */
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: .9rem;
+    margin: 0 0 1.4rem;
+    padding-bottom: .7rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .sec-head h2 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 1.4rem;
+    letter-spacing: .02em;
+  }
+  .sec-head p { margin: 0; font-size: .84rem; color: var(--ink-mute); }
+
+  /* ── options ────────────────────────────────────────────────────────── */
+  .options { display: flex; flex-direction: column; gap: 1rem; }
+
+  .opt {
+    display: grid;
+    grid-template-columns: 2.9rem 1fr 7.5rem;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-left: 4px solid var(--stripe);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .opt--rec { box-shadow: var(--shadow); border-color: var(--line); }
+
+  .opt[data-hue="blue"]   { --stripe: var(--g-blue); }
+  .opt[data-hue="green"]  { --stripe: var(--g-green); }
+  .opt[data-hue="yellow"] { --stripe: var(--g-yellow); }
+  .opt[data-hue="purple"] { --stripe: var(--g-purple); }
+  .opt[data-hue="cyan"]   { --stripe: var(--g-cyan); }
+
+  .opt__num {
+    display: flex;
+    justify-content: center;
+    padding: 1.45rem 0 0;
+    font-family: var(--display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--stripe);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .opt__body { padding: 1.25rem 1.1rem 1.35rem 0; min-width: 0; }
+
+  .opt__title {
+    margin: 0 0 .1rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .6rem;
+    font-size: 1.16rem;
+    font-weight: 700;
+    line-height: 1.5;
+    letter-spacing: .01em;
+  }
+
+  .chip {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .09em;
+    padding: .18em .6em;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  .lines { margin: .8rem 0 0; display: flex; flex-direction: column; gap: .55rem; }
+  .lines p { margin: 0; color: var(--ink-soft); }
+  .lines b {
+    display: inline-block;
+    min-width: 3.1em;
+    margin-right: .5em;
+    font-size: .74rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: var(--ink-mute);
+    vertical-align: .12em;
+  }
+  .lines p strong { color: var(--ink); font-weight: 700; }
+
+  .gotchas {
+    margin: 1rem 0 0;
+    padding: .85rem 1rem .85rem 2.1rem;
+    background: var(--sunken);
+    border-radius: 6px;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    font-size: .92rem;
+    color: var(--ink-soft);
+  }
+  .gotchas li { position: relative; }
+  .gotchas li::before {
+    content: "";
+    position: absolute;
+    left: -1.05rem;
+    top: .78em;
+    width: .38rem;
+    height: .38rem;
+    border-radius: 1px;
+    background: var(--stripe);
+    transform: rotate(45deg);
+  }
+  .gotchas strong { color: var(--ink); font-weight: 700; }
+
+  .opt__cost {
+    padding: 1.35rem 1.25rem 1.35rem 0;
+    text-align: right;
+    border-left: 1px dashed var(--hairline);
+    padding-left: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .1rem;
+  }
+  .cost__n {
+    font-family: var(--mono);
+    font-weight: 500;
+    font-size: 1.25rem;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .cost__u { font-size: .78rem; color: var(--ink-mute); letter-spacing: .08em; }
+  .cost__note {
+    margin-top: .5rem;
+    font-size: .72rem;
+    line-height: 1.6;
+    color: var(--ink-mute);
+  }
+
+  @media (max-width: 46rem) {
+    .opt { grid-template-columns: 2.4rem 1fr; }
+    .opt__body { padding-right: 1rem; }
+    .opt__cost {
+      grid-column: 2;
+      flex-direction: row;
+      align-items: baseline;
+      justify-content: flex-start;
+      gap: .5rem;
+      padding: 0 1rem 1.2rem 0;
+      border-left: 0;
+      border-top: 1px dashed var(--hairline);
+      padding-top: .85rem;
+      margin-top: -.3rem;
+      text-align: left;
+    }
+    .cost__note { margin-top: 0; }
+  }
+
+  /* ── rejected table ─────────────────────────────────────────────────── */
+  .tablewrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .93rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .7rem .9rem;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: top;
+  }
+  th {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: var(--ink-mute);
+    border-bottom-color: var(--line);
+    white-space: nowrap;
+  }
+  td:first-child { font-weight: 500; color: var(--ink); white-space: nowrap; }
+  td:last-child { color: var(--ink-soft); }
+
+  /* ── rules ──────────────────────────────────────────────────────────── */
+  .rules { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .8rem; }
+  .rules li {
+    padding-left: 1.6rem;
+    position: relative;
+    color: var(--ink-soft);
+  }
+  .rules li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: .72em;
+    width: .7rem;
+    height: 2px;
+    background: var(--accent);
+  }
+  .rules strong { color: var(--ink); font-weight: 700; }
+
+  footer {
+    font-size: .82rem;
+    color: var(--ink-mute);
+    border-top: 1px solid var(--hairline);
+    padding-top: 1.2rem;
+    line-height: 1.9;
+  }
+
+  @media print {
+    body { background: #fff; color: #000; }
+    .wrap { padding: 0; gap: 2rem; }
+    .opt { break-inside: avoid; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">縦タブ拡張 — 実装候補</p>
+    <h1>次に作る機能を<br>ひとつ選ぶ</h1>
+    <p class="lede">
+      5 案を提案のまま並べたのではなく、<strong>実コードに当てて</strong>見積もった。
+      どの案も新しい権限を要求せず、ネットワークにも出ない。
+      推奨は <strong>1 → 2 → 3</strong>。
+    </p>
+    <dl class="facts">
+      <div><dt>現在地</dt><dd>unit 72／72<br>e2e 59 passed</dd></div>
+      <div><dt>ブランチ</dt><dd>feat/vertical-tabs<br>-sidepanel</dd></div>
+      <div><dt>PR</dt><dd>#1 open</dd></div>
+      <div><dt>権限追加</dt><dd>5 案とも なし</dd></div>
+    </dl>
+  </header>
+
+  <section class="options" aria-label="実装候補">
+
+    <article class="opt opt--rec" data-hue="blue">
+      <div class="opt__num">1</div>
+      <div class="opt__body">
+        <h2 class="opt__title">ウィンドウ跨ぎのタブ検索 <span class="chip">推奨</span></h2>
+        <div class="lines">
+          <p><b>今</b>検索は<strong>描画済み DOM を隠すだけ</strong>で、Chrome に一切問い合わせない。描画元のモデルが <span class="path">tabs.query({ windowId })</span> に閉じているので、他のウィンドウは原理的に見えない。実装漏れではなく設計の境界。</p>
+          <p><b>作る</b>検索語がある間だけリスト下に「他のウィンドウ」節を出す。クリックでそのウィンドウを前に出してタブを開く。</p>
+        </div>
+        <ul class="gotchas">
+          <li>他ウィンドウのタブを<strong>モデルに混ぜない</strong>。D&amp;D・キーボード・差分描画のすべてが「モデル＝現ウィンドウ」に依存している。独立した節として描くのが安全。</li>
+          <li>初版はファビコンとタイトルだけにする。検索結果までサムネを撮るとキャプチャ列が伸びる。</li>
+        </ul>
+      </div>
+      <div class="opt__cost">
+        <span class="cost__n">250–350</span><span class="cost__u">行</span>
+        <span class="cost__note">search.js 約 150<br>器と文言 約 100</span>
+      </div>
+    </article>
+
+    <article class="opt opt--rec" data-hue="green">
+      <div class="opt__num">2</div>
+      <div class="opt__body">
+        <h2 class="opt__title">サイトごとの自動グループ化 <span class="chip">推奨</span></h2>
+        <div class="lines">
+          <p><b>今</b>グループの表示と手動操作は揃っている。<span class="path">tabs.group</span> / <span class="path">ungroup</span> は D&amp;D とキーボードから既に使われる。<strong>足りないのは「まとめて切る」入口だけ</strong>。</p>
+          <p><b>作る</b>ツール列にひとつ追加。ホスト名で束ね、2 つ以上あるホストをグループにする。名前はホスト名、色はハッシュ。取り消しを必ず添える。</p>
+        </div>
+        <ul class="gotchas">
+          <li>グループ化すると <strong>Chrome がタブを隣接位置へ動かす</strong>＝ index が変わる。直後に再同期を呼ばないと並びがずれる。</li>
+          <li>1 ホスト 1 グループはホストが多いと逆に読みにくい。しきい値を設定にするか決め打ちにするかは要判断。</li>
+        </ul>
+      </div>
+      <div class="opt__cost">
+        <span class="cost__n">150–200</span><span class="cost__u">行</span>
+        <span class="cost__note">ツール 1 ファイル<br>＋ 文言</span>
+      </div>
+    </article>
+
+    <article class="opt opt--rec" data-hue="yellow">
+      <div class="opt__num">3</div>
+      <div class="opt__body">
+        <h2 class="opt__title">タブのロック（閉じない） <span class="chip">推奨</span></h2>
+        <div class="lines">
+          <p><b>今</b>パネルからの close はほぼ <span class="path">ops.remove</span> に集約されている。例外がひとつ、重複検出ツールだけ <span class="path">chrome.tabs.remove</span> を直接呼んでいて経路の外にある。</p>
+          <p><b>作る</b>タブに鍵を付け、パネル内のあらゆる close 経路がそれを見る。前提として上の例外を先に揃える。</p>
+        </div>
+        <ul class="gotchas">
+          <li><strong>拡張は <span class="path">tabs.onRemoved</span> を拒否できない。</strong>タブバーの × や Ctrl+W は止められないので、これは「このパネルからの誤爆を防ぐ」機能であって、タブの保護ではない。UI にそう書く必要がある。</li>
+          <li><span class="path">ops.remove</span> は失敗時に自前でトーストを出す。素直に繋ぐとツール側のトーストと二重に出る。</li>
+        </ul>
+      </div>
+      <div class="opt__cost">
+        <span class="cost__n">150</span><span class="cost__u">行</span>
+        <span class="cost__note">本体 120<br>経路の整理 30</span>
+      </div>
+    </article>
+
+    <article class="opt" data-hue="purple">
+      <div class="opt__num">4</div>
+      <div class="opt__body">
+        <h2 class="opt__title">コマンドパレット（Ctrl+K）</h2>
+        <div class="lines">
+          <p><b>今</b>オーバーレイと Esc で閉じる作法は右クリックメニューに、ショートカット登録の作法は <span class="path">commands</span> に既にある。<strong>土台は揃っている</strong>。</p>
+          <p><b>作る</b>コマンド登録簿と絞り込み、そのオーバーレイ。</p>
+        </div>
+        <ul class="gotchas">
+          <li><strong>機能が増えてから価値が出る。</strong>今の機能数だと右クリックとキーボードで足りてしまうので、1〜3 の後が順当。</li>
+        </ul>
+      </div>
+      <div class="opt__cost">
+        <span class="cost__n">300</span><span class="cost__u">行</span>
+        <span class="cost__note">登録簿・絞り込み<br>・オーバーレイ</span>
+      </div>
+    </article>
+
+    <article class="opt" data-hue="cyan">
+      <div class="opt__num">5</div>
+      <div class="opt__body">
+        <h2 class="opt__title">Markdown 書き出し／URL 一括オープン</h2>
+        <div class="lines">
+          <p><b>今</b>一括オープンはタブ保存ツールが既にやっている。書き出しはモデルを文字列にするだけ。</p>
+          <p><b>作る</b>タブ一覧を Markdown でコピー。貼り付けた URL をまとめて新しいウィンドウに開く。</p>
+        </div>
+        <ul class="gotchas">
+          <li><strong>5 案で最も安い。</strong>ただし効き目も小さい。他を選んだついでに足せる規模。</li>
+        </ul>
+      </div>
+      <div class="opt__cost">
+        <span class="cost__n">120</span><span class="cost__u">行</span>
+        <span class="cost__note">既存部品の<br>組み替えが主</span>
+      </div>
+    </article>
+
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>作らない方がよいもの</h2>
+      <p>検討して落とした案</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th scope="col">案</th><th scope="col">落とした理由</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>タブ別のメモリ表示</td><td>安定した API が無い。<span class="path">chrome.processes</span> の可用性は未実測で、使うなら実測が先になる。</td></tr>
+          <tr><td>リーディングリスト連携</td><td>Chrome 自身の UI と重複する。同じものを二か所に置くことになる。</td></tr>
+          <tr><td>古いタブの自動クローズ</td><td>取り返しがつかない。放置タブツールの休止（hibernate）で目的は足りている。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>どれを選んでも守ること</h2>
+      <p>選定後の実装に効く制約</p>
+    </div>
+    <ul class="rules">
+      <li><strong>ネットワークを使う機能は足さない。</strong>README の「一切通信しない」と、それを検証しているテストの両方が崩れる。天気と予定のウィジェットを消したのはこのため。</li>
+      <li><strong>新しい権限を要求しない。</strong>5 案はいずれも現行の権限で足りる。</li>
+      <li>タブ列の幾何を測る新しいテストは <span class="path">widgets: []</span> を明示する。ツール列が既定オンで 184px 取るため。</li>
+      <li>文言は英語と日本語の両方に入れる。片方だけだとユニットテストが落ちる。</li>
+    </ul>
+  </section>
+
+  <footer>
+    見積の単位は「新規＋変更の行数」で、テストコードは含まない。既存モジュールのコメント込みの密度に合わせた実績ベース。<br>
+    根拠と該当行はリポジトリの <span class="path">.agent/feature-options.md</span> に、ファイルと行番号付きで残してある。
+  </footer>
+
+</div>
+</body>
+</html>

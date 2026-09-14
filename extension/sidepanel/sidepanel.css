@@ -1,0 +1,1875 @@
+/* =============================================================================
+   Vertical Tabs with Previews — side panel stylesheet
+   spec.md §8.4, spec-addendum A10 (thumbnail states), A11 (grid geometry),
+   A15 (accessibility / reduced motion).
+
+   Theme model
+   -----------
+   `documentElement[data-theme]` is authoritative and is written by
+   `applySettingsAttrs()` ("dark" | "light"; the "system" setting is resolved
+   through `matchMedia('(prefers-color-scheme: dark)')`). The dark palette is
+   the bare `:root` default so the panel never flashes light, and the light
+   palette is additionally published under `prefers-color-scheme: light` so a
+   document that carries no explicit attribute still follows the OS.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --vt-bg: #2a2a2a;
+  --vt-card: #333333;
+  --vt-card-hover: #3b3b3b;
+  --vt-card-active: #474747;
+  --vt-card-border: rgba(255, 255, 255, .06);
+  --vt-text: #ececec;
+  --vt-text-muted: #a6a6a6;
+  --vt-thumb-bg: #1f1f1f;
+  --vt-placeholder-icon: rgba(255, 255, 255, .18);
+  /* Pages Chrome will never let an extension capture (spec-addendum A10 states).
+     The surface deliberately sits at the CARD's tone rather than the near-black
+     preview tone, so the box reads as "the card just continues here" instead of a
+     black hole, and the label/glyph clear WCAG AA on it (measured 4.82:1 dark,
+     4.93:1 light). */
+  --vt-thumb-blocked-bg: #383838;
+  --vt-thumb-blocked-fg: #a6a6a6;
+  --vt-thumb-blocked-hatch: rgba(255, 255, 255, .05);
+  /* Only the "Chrome is withholding site access" reason, which the user can act on.
+     `--vt-accent` itself measures 2.97:1 on #383838 — a hair under WCAG 1.4.11's 3:1
+     for a non-text graphic — so this is the same hue lightened until it clears (3.17:1).
+     In the light palette it is darkened instead (4.34:1 on #e2e2e2). */
+  --vt-thumb-blocked-alert: #BF5DCF;
+  --vt-accent: #B35FC0;
+  /* White text on `--vt-accent` is only 3.95:1, below WCAG AA for the 10-12 px
+     labels that need it (`.badge`, the danger confirm button). This is the same
+     hue darkened until white clears 4.5:1 (5.62:1); it is a text background only —
+     `--vt-accent` itself stays exactly as spec.md §8.4 prescribes for the active
+     bar, the unread dot and the drop indicator. Theme-invariant, like the accent. */
+  --vt-accent-strong: #9746A5;
+  --vt-focus: #8ab4f8;
+  --vt-warn-bg: #4a3a1a;
+  --vt-close-hover-bg: rgba(255, 255, 255, .14);
+  --vt-menu-bg: #3a3a3a;
+  --vt-menu-hover: #4a4a4a;
+  --vt-input-bg: #1f1f1f;
+  --vt-input-border: #444444;
+  --vt-badge-bg: rgba(0, 0, 0, .45);
+  --vt-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+  --vt-divider: rgba(255, 255, 255, .08);
+  --vt-shimmer: rgba(255, 255, 255, .07);
+  --vt-scrollbar: rgba(255, 255, 255, .18);
+
+  /* Tab-group palette (spec §4.8 — Chromium refresh palette, dark column) */
+  --vt-group-grey: #DFE2E9;
+  --vt-group-blue: #A8BCFF;
+  --vt-group-red: #FF928B;
+  --vt-group-yellow: #FFDD7A;
+  --vt-group-green: #87EB84;
+  --vt-group-pink: #FF96DE;
+  --vt-group-purple: #CB93FF;
+  --vt-group-cyan: #88E3EB;
+  --vt-group-orange: #FFB379;
+
+  /* Dimensions */
+  --vt-gap: 6px;
+  --vt-card-radius: 6px;
+  --vt-card-padding: 6px;
+  --vt-thumb-radius: 4px;
+  --vt-thumb-aspect: 8 / 3;
+  --vt-favicon: 16px;
+  --vt-title-size: 13px;
+  --vt-head-height: 22px;
+  --vt-pinned-tile: 34px;
+  --vt-bar-height: 40px;
+  --vt-group-bar: 3px;
+  --vt-active-bar: 3px;
+  --vt-list-padding: 8px;
+
+  /* Column count (see the `.tablist` block). `data-columns` on <html> is written
+     by `applySettingsAttrs()` and is the only thing that changes here. */
+  --vt-columns: 1;
+  /* The narrowest card that is still worth rendering: 96 px leaves an 84 x 32 px
+     preview and a 16 px favicon with a few characters of title. Below that a card
+     stops carrying information, so the panel drops a column instead. */
+  --vt-card-min: 96px;
+  /* Width of the widget rail when it is shown. */
+  --vt-rail-width: 184px;
+  /* The width the user asked each card to be. Unset = fill the column, which is
+     the default and lets `--vt-columns` decide the count. render.js sets it to the
+     chosen pixel width, and the rule below then packs as many cards of that size
+     as the panel holds instead of leaving a gutter beside a single narrow column.
+
+     Chrome will not let an extension set the side panel's own width — the minimum
+     inner width is hard-coded at 360 px (raised from 320) and there is no flag —
+     so sizing the cards is the only control an extension has over the strip. */
+  /* Exactly `--vt-columns` tracks whenever they each clear `--vt-card-min`,
+     otherwise as many as do — see the `.tablist` block for the derivation. */
+  --vt-track-min: min(
+    100%,
+    max(
+      var(--vt-card-min),
+      calc((100% - (var(--vt-columns) - 1) * var(--vt-gap)) / var(--vt-columns))
+    )
+  );
+}
+
+/* A chosen card width replaces the column count as the thing that decides the
+   track size: `auto-fill` then lays out as many cards of that width as fit and
+   stretches them to close the row, rather than parking one narrow card against a
+   wide empty gutter. Measured in Chrome's 360 px minimum panel (334 px content):
+   160 px → 2 x 164 px, the density a vertical tab strip is usually drawn at. */
+:root[style*="--vt-card-max"] {
+  --vt-track-min: min(100%, var(--vt-card-max));
+}
+
+[data-columns="2"] { --vt-columns: 2; }
+[data-columns="3"] { --vt-columns: 3; }
+[data-columns="4"] { --vt-columns: 4; }
+[data-columns="5"] { --vt-columns: 5; }
+
+/* Light palette — applied when the OS asks for light and no explicit dark
+   attribute is set (pre-bootstrap), and whenever data-theme="light". */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --vt-bg: #f2f2f2;
+    --vt-card: #e8e8e8;
+    --vt-card-hover: #e0e0e0;
+    --vt-card-active: #ffffff;
+    --vt-card-border: rgba(0, 0, 0, .08);
+    --vt-text: #202020;
+    --vt-text-muted: #5f5f5f;
+    --vt-thumb-bg: #d9d9d9;
+    --vt-placeholder-icon: rgba(0, 0, 0, .18);
+    --vt-thumb-blocked-bg: #e2e2e2;
+    --vt-thumb-blocked-fg: #5f5f5f;
+    --vt-thumb-blocked-hatch: rgba(0, 0, 0, .05);
+    --vt-thumb-blocked-alert: #9746A5;
+    --vt-accent: #B35FC0;
+    --vt-accent-strong: #9746A5;
+    --vt-focus: #1a73e8;
+    --vt-warn-bg: #fff3cd;
+    --vt-close-hover-bg: rgba(0, 0, 0, .10);
+    --vt-menu-bg: #ffffff;
+    --vt-menu-hover: #f0f0f0;
+    --vt-input-bg: #ffffff;
+    --vt-input-border: #cccccc;
+    --vt-badge-bg: rgba(255, 255, 255, .75);
+    --vt-shadow: 0 6px 20px rgba(0, 0, 0, .20);
+    --vt-divider: rgba(0, 0, 0, .10);
+    --vt-shimmer: rgba(0, 0, 0, .05);
+    --vt-scrollbar: rgba(0, 0, 0, .22);
+
+    --vt-group-grey: #5F6369;
+    --vt-group-blue: #436BD7;
+    --vt-group-red: #DB1B2B;
+    --vt-group-yellow: #FFD036;
+    --vt-group-green: #188129;
+    --vt-group-pink: #C809A8;
+    --vt-group-purple: #9D39F3;
+    --vt-group-cyan: #007B83;
+    --vt-group-orange: #FF9436;
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --vt-bg: #f2f2f2;
+  --vt-card: #e8e8e8;
+  --vt-card-hover: #e0e0e0;
+  --vt-card-active: #ffffff;
+  --vt-card-border: rgba(0, 0, 0, .08);
+  --vt-text: #202020;
+  --vt-text-muted: #5f5f5f;
+  --vt-thumb-bg: #d9d9d9;
+  --vt-placeholder-icon: rgba(0, 0, 0, .18);
+  --vt-thumb-blocked-bg: #e2e2e2;
+  --vt-thumb-blocked-fg: #5f5f5f;
+  --vt-thumb-blocked-hatch: rgba(0, 0, 0, .05);
+  --vt-thumb-blocked-alert: #9746A5;
+  --vt-accent: #B35FC0;
+  --vt-accent-strong: #9746A5;
+  --vt-focus: #1a73e8;
+  --vt-warn-bg: #fff3cd;
+  --vt-close-hover-bg: rgba(0, 0, 0, .10);
+  --vt-menu-bg: #ffffff;
+  --vt-menu-hover: #f0f0f0;
+  --vt-input-bg: #ffffff;
+  --vt-input-border: #cccccc;
+  --vt-badge-bg: rgba(255, 255, 255, .75);
+  --vt-shadow: 0 6px 20px rgba(0, 0, 0, .20);
+  --vt-divider: rgba(0, 0, 0, .10);
+  --vt-shimmer: rgba(0, 0, 0, .05);
+  --vt-scrollbar: rgba(0, 0, 0, .22);
+
+  --vt-group-grey: #5F6369;
+  --vt-group-blue: #436BD7;
+  --vt-group-red: #DB1B2B;
+  --vt-group-yellow: #FFD036;
+  --vt-group-green: #188129;
+  --vt-group-pink: #C809A8;
+  --vt-group-purple: #9D39F3;
+  --vt-group-cyan: #007B83;
+  --vt-group-orange: #FF9436;
+}
+
+/* An explicit dark choice must win over `prefers-color-scheme: light`. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --vt-bg: #2a2a2a;
+  --vt-card: #333333;
+  --vt-card-hover: #3b3b3b;
+  --vt-card-active: #474747;
+  --vt-card-border: rgba(255, 255, 255, .06);
+  --vt-text: #ececec;
+  --vt-text-muted: #a6a6a6;
+  --vt-thumb-bg: #1f1f1f;
+  --vt-placeholder-icon: rgba(255, 255, 255, .18);
+  --vt-thumb-blocked-bg: #383838;
+  --vt-thumb-blocked-fg: #a6a6a6;
+  --vt-thumb-blocked-hatch: rgba(255, 255, 255, .05);
+  /* Only the "Chrome is withholding site access" reason, which the user can act on.
+     `--vt-accent` itself measures 2.97:1 on #383838 — a hair under WCAG 1.4.11's 3:1
+     for a non-text graphic — so this is the same hue lightened until it clears (3.17:1).
+     In the light palette it is darkened instead (4.34:1 on #e2e2e2). */
+  --vt-thumb-blocked-alert: #BF5DCF;
+  --vt-focus: #8ab4f8;
+  --vt-warn-bg: #4a3a1a;
+  --vt-close-hover-bg: rgba(255, 255, 255, .14);
+  --vt-menu-bg: #3a3a3a;
+  --vt-menu-hover: #4a4a4a;
+  --vt-input-bg: #1f1f1f;
+  --vt-input-border: #444444;
+  --vt-badge-bg: rgba(0, 0, 0, .45);
+  --vt-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+  --vt-divider: rgba(255, 255, 255, .08);
+  --vt-shimmer: rgba(255, 255, 255, .07);
+  --vt-scrollbar: rgba(255, 255, 255, .18);
+
+  --vt-group-grey: #DFE2E9;
+  --vt-group-blue: #A8BCFF;
+  --vt-group-red: #FF928B;
+  --vt-group-yellow: #FFDD7A;
+  --vt-group-green: #87EB84;
+  --vt-group-pink: #FF96DE;
+  --vt-group-purple: #CB93FF;
+  --vt-group-cyan: #88E3EB;
+  --vt-group-orange: #FFB379;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
+
+/* An author `display` beats the UA rule for [hidden], so state it once here. */
+[hidden] { display: none !important; }
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--vt-bg);
+  color: var(--vt-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+  font-size: var(--vt-title-size);
+  line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+}
+
+svg.icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  flex: none;
+  pointer-events: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--vt-focus);
+  outline-offset: 1px;
+}
+
+/* ── Icon buttons ─────────────────────────────────────────────────────────── */
+
+.iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--vt-text-muted);
+  cursor: pointer;
+  flex: none;
+  position: relative;
+  transition: background-color .12s, color .12s;
+}
+
+.iconbtn:hover {
+  background: var(--vt-close-hover-bg);
+  color: var(--vt-text);
+}
+
+.iconbtn:active { transform: translateY(1px); }
+
+.btn {
+  border: 1px solid var(--vt-input-border);
+  border-radius: 5px;
+  background: var(--vt-menu-bg);
+  color: var(--vt-text);
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn:hover { background: var(--vt-menu-hover); }
+
+/* ── Top bar (search + settings) ──────────────────────────────────────────── */
+
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--vt-divider);
+  background: var(--vt-bg);
+}
+
+.search {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.search__icon {
+  position: absolute;
+  left: 7px;
+  color: var(--vt-text-muted);
+}
+
+#search-input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 28px 0 28px;
+  border: 1px solid var(--vt-input-border);
+  border-radius: 14px;
+  background: var(--vt-input-bg);
+  color: var(--vt-text);
+  font-size: 12px;
+}
+
+#search-input::placeholder { color: var(--vt-text-muted); }
+#search-input::-webkit-search-cancel-button { display: none; }
+
+#search-clear {
+  position: absolute;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+}
+
+/* ── Banners ──────────────────────────────────────────────────────────────── */
+
+.hint {
+  flex: none;
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 8px 0;
+  padding: 8px 30px 8px 10px;
+  border: 1px solid var(--vt-card-border);
+  border-radius: var(--vt-card-radius);
+  background: var(--vt-menu-bg);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hint--warn {
+  background: var(--vt-warn-bg);
+  border-color: transparent;
+}
+
+.hint p { margin: 0; flex: 1 1 100%; }
+
+.hint__actions { display: flex; gap: 6px; }
+
+.hint__dismiss {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+}
+
+/* ── Pinned grid ──────────────────────────────────────────────────────────── */
+
+.pinned {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 8px 0;
+}
+
+.pinned[hidden] { display: none; }
+
+.pinned-tile {
+  position: relative;
+  width: var(--vt-pinned-tile);
+  height: var(--vt-pinned-tile);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--vt-card-border);
+  border-radius: 6px;
+  background: var(--vt-card);
+  cursor: pointer;
+  transition: background-color .12s;
+}
+
+.pinned-tile:hover { background: var(--vt-card-hover); }
+
+.pinned-tile.is-active {
+  background: var(--vt-card-active);
+  box-shadow: inset 0 -2px 0 0 var(--vt-accent);
+}
+
+.pinned-tile.is-highlighted {
+  outline: 2px solid var(--vt-focus);
+  outline-offset: -2px;
+}
+
+.pinned-tile.is-discarded { opacity: .55; }
+.pinned-tile.is-hidden { display: none; }
+.pinned-tile.is-dragging { opacity: .4; }
+
+.pinned-tile .favicon,
+.pinned-tile .favicon-fallback {
+  width: var(--vt-favicon);
+  height: var(--vt-favicon);
+}
+
+.pinned-tile .unread-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: none;
+}
+
+.pinned-tile.is-unread .unread-dot { display: block; }
+
+/* ── Tab list ─────────────────────────────────────────────────────────────── */
+
+/* The tab list and the widget rail sit side by side and share the panel's height.
+   `min-width: 0` on both is what lets the tab list actually shrink to make room —
+   a flex item's automatic minimum size is its content, so without it the rail would
+   be pushed out of the panel instead. */
+.main-row {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.rail {
+  flex: 0 0 var(--vt-rail-width);
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 8px 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--vt-gap);
+  scrollbar-width: thin;
+  scrollbar-color: var(--vt-scrollbar) transparent;
+}
+
+.rail[hidden] { display: none; }
+
+.widget__body { min-width: 0; }
+
+/* Clock */
+.w-clock__time {
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+  line-height: 1.1;
+}
+.w-clock__date { margin-top: 2px; font-size: 11px; color: var(--vt-text-muted); }
+
+/* Calendar */
+.w-cal__head {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  text-align: center;
+}
+.w-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.w-cal__dow { color: var(--vt-text-muted); font-size: 9px; padding-bottom: 2px; }
+.w-cal__day { padding: 1px 0; border-radius: 3px; }
+.w-cal__day.is-today {
+  background: var(--vt-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Now playing */
+.w-np__empty { font-size: 11px; color: var(--vt-text-muted); }
+.w-np__list { display: flex; flex-direction: column; gap: 4px; }
+.w-np__row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.w-np__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.w-np__title:hover { text-decoration: underline; }
+.w-np__mute { flex: none; }
+
+/* Shared widget furniture */
+.w-muted { font-size: 11px; color: var(--vt-text-muted); }
+.w-btn {
+  width: 100%;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--vt-text);
+  background: var(--vt-menu-bg);
+  border: 1px solid var(--vt-card-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.w-btn:hover { background: var(--vt-menu-hover); }
+.w-btn + * { margin-top: 6px; }
+.w-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--vt-text);
+  background: var(--vt-bg);
+  border: 1px solid var(--vt-card-border);
+  border-radius: 4px;
+}
+
+/* Saved sets */
+.w-sess__list { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.w-sess__row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.w-sess__open {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.w-sess__open:hover { text-decoration: underline; }
+.w-sess__delete { flex: none; width: 16px; height: 16px; }
+.w-sess__delete svg { width: 11px; height: 11px; }
+
+/* Notes */
+.w-pad {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--vt-text);
+  background: var(--vt-bg);
+  border: 1px solid var(--vt-card-border);
+  border-radius: 4px;
+}
+
+/* Weather */
+.w-wx { display: flex; align-items: baseline; gap: 6px; }
+.w-wx__glyph { font-size: 20px; line-height: 1; }
+.w-wx__temp { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.w-wx__place { margin-top: 2px; }
+.w-wx__form { margin-top: 6px; }
+
+/* Today */
+.w-agenda__list { display: flex; flex-direction: column; gap: 4px; }
+.w-agenda__row { display: flex; gap: 5px; align-items: baseline; min-width: 0; font-size: 11px; }
+.w-agenda__when {
+  flex: none;
+  color: var(--vt-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.w-agenda__what { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-agenda__form { margin-top: 6px; }
+.w-agenda__help { margin: 4px 0 0; font-size: 10px; line-height: 1.35; }
+
+
+
+.widget {
+  flex: none;
+  border: 1px solid var(--vt-card-border);
+  border-radius: var(--vt-card-radius);
+  background: var(--vt-card-bg);
+  padding: 8px;
+  overflow: hidden;
+}
+
+.widget__title {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--vt-text-muted);
+}
+
+.tablist {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: var(--vt-list-padding);
+  container-type: inline-size;
+  container-name: list;
+  scrollbar-width: thin;
+  scrollbar-color: var(--vt-scrollbar) transparent;
+}
+
+.tablist::-webkit-scrollbar { width: 10px; }
+.tablist::-webkit-scrollbar-track { background: transparent; }
+.tablist::-webkit-scrollbar-thumb {
+  background: var(--vt-scrollbar);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 5px;
+}
+
+/* Exactly `--vt-columns` columns of cards, degrading when the panel is too narrow.
+   One column is the default: one full-width card per row.
+
+   How the track formula gets "exactly N, or as many as fit":
+     ideal = (100% - (N - 1) × gap) / N        the width N tracks would each get
+     min   = min(100%, max(card-min, ideal))   never thinner than a usable card,
+                                               never wider than the container
+     repeat(auto-fill, minmax(min, 1fr))
+   While `ideal >= card-min` the minimum IS the exact share of the row, so N tracks
+   fill it perfectly and an (N+1)-th cannot fit: exactly N columns. Once the panel
+   is too narrow for that, the minimum sticks at `--vt-card-min` and `auto-fill`
+   drops to however many cards of that width do fit — 3, then 2, then 1. The outer
+   `min(100%, …)` is what stops the last step from overflowing horizontally when
+   even one card-min does not fit. Measured at a 334 px content box (Chrome's
+   360 px minimum panel): 1 → 334 px cards, 2 → 164 px, 3/4/5 → 3 × 107 px.
+
+   `grid-auto-rows: max-content` is load-bearing, not cosmetic. `.tab-card` sets
+   `overflow: hidden`, which zeroes a grid item's automatic minimum size, so with
+   the initial `grid-auto-rows: auto` a row's base size is only the card's padding
+   and border. Grid's "maximize tracks" step then hands the whole panel height out
+   to whatever rows exist and the list NEVER overflows: adding tabs makes every
+   card thinner instead, until the preview is clipped to nothing (measured: 28 tabs
+   in a 700 px panel gave 37 px cards and 0 px of visible thumbnail). Sizing the
+   implicit rows to their content keeps cards at their natural height and lets the
+   `overflow-y: auto` above actually scroll — at every column count. `.tab-card`
+   and `.group` keep their `flex-shrink: 0` for the same reason. */
+.tablist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--vt-track-min), 1fr));
+  grid-auto-rows: max-content;
+  gap: var(--vt-gap);
+  align-content: start;
+}
+
+/* ── Group sections ───────────────────────────────────────────────────────── */
+
+.group {
+  --group-color: var(--vt-group-grey);
+  /* Flex item of `.tablist` in the list layouts — never let the column compress a
+     whole group; the list scrolls instead (see the note on `.tablist`). */
+  flex-shrink: 0;
+  border-left: var(--vt-group-bar) solid var(--group-color);
+  border-radius: 4px;
+  padding-left: 6px;
+  min-width: 0;
+}
+
+/* A group is a section, not a card: it always spans the whole row. */
+.group { grid-column: 1 / -1; }
+
+.group.is-hidden { display: none; }
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 4px 0 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--group-color) 18%, transparent);
+  cursor: pointer;
+  user-select: none;
+}
+
+.group-header:hover { background: color-mix(in srgb, var(--group-color) 28%, transparent); }
+
+.group-toggle {
+  width: 20px;
+  height: 20px;
+  color: var(--vt-text);
+}
+
+.group-toggle svg { transition: transform .12s; }
+.group-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+
+.group-swatch {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--group-color);
+  cursor: pointer;
+}
+
+.group-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.group-title.is-untitled {
+  color: var(--vt-text-muted);
+  font-weight: 500;
+}
+
+.group-title-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 18px;
+  border: 1px solid var(--vt-input-border);
+  border-radius: 3px;
+  background: var(--vt-input-bg);
+  color: var(--vt-text);
+  font: inherit;
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.group-count {
+  flex: none;
+  font-size: 11px;
+  color: var(--vt-text-muted);
+  background: var(--vt-badge-bg);
+  border-radius: 8px;
+  padding: 0 6px;
+}
+
+/* The cards inside a group use the same column count as the list. The group body
+   is indented by the colour bar and its padding, so its `100%` is a few pixels
+   narrower than the list's — it therefore degrades one step earlier, which is the
+   intended behaviour rather than a mismatch. */
+.group-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--vt-track-min), 1fr));
+  grid-auto-rows: max-content;
+  gap: var(--vt-gap);
+  padding: var(--vt-gap) 0 6px;
+  align-content: start;
+  min-width: 0;
+}
+
+.group.is-collapsed .group-body { display: none; }
+.group.is-collapsed .group-toggle svg { transform: rotate(0deg); }
+
+/* ── Cards ────────────────────────────────────────────────────────────────── */
+
+.tab-card {
+  --card-bg: var(--vt-card);
+  position: relative; /* the sound overlay above is positioned against this */
+  display: block;
+  /* Flex item of `.tablist` / `.group-body` in the list layouts. `overflow: hidden`
+     below zeroes the automatic minimum size, so without this a full list divides
+     the panel height between its cards — silently cropping every preview — instead
+     of overflowing. See the note on `.tablist`. */
+  flex-shrink: 0;
+  min-width: 0;
+  padding: var(--vt-card-padding);
+  border: 1px solid var(--vt-card-border);
+  border-radius: var(--vt-card-radius);
+  background: var(--card-bg);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-drag: element;
+  overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 101px;
+  transition: background-color .12s;
+}
+
+/* Only the first guess before a card has ever been laid out (`auto` then keeps the
+   real size), so one value per width band is enough. */
+[data-columns="1"] .tab-card { contain-intrinsic-size: auto 167px; }
+[data-columns="4"] .tab-card,
+[data-columns="5"] .tab-card { contain-intrinsic-size: auto 82px; }
+
+.tab-card:hover { --card-bg: var(--vt-card-hover); }
+
+.tab-card.is-active {
+  --card-bg: var(--vt-card-active);
+  border-color: color-mix(in srgb, var(--vt-accent) 55%, var(--vt-card-border));
+}
+
+/* The active card carries an unmistakable accent bar on its leading edge. */
+.tab-card.is-active::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--vt-active-bar);
+  background: var(--vt-accent);
+  border-radius: var(--vt-card-radius) 0 0 var(--vt-card-radius);
+}
+
+.tab-card.is-highlighted {
+  outline: 2px solid var(--vt-focus);
+  outline-offset: -2px;
+}
+
+.tab-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--vt-focus) inset;
+}
+
+.tab-card.is-discarded { opacity: .55; }
+.tab-card.is-discarded .thumb__img { filter: grayscale(1); }
+.tab-card.is-dragging { opacity: .4; }
+.tab-card.is-hidden { display: none; }
+.tab-card.is-drop-target { box-shadow: 0 0 0 2px var(--vt-accent) inset; }
+
+/* ── Card head row ────────────────────────────────────────────────────────── */
+
+/* `padding-right` reserves the absolutely positioned `.close` (18 px) plus one row
+   `gap` (6 px). `.close` is out of flow and anchored to the padding edge, so this
+   does not move it — it only stops the in-flow content, i.e. `.title`, from running
+   underneath it. Without the reserve the "…" that `text-overflow` paints at the
+   title's right edge lands exactly under the button and disappears whenever the
+   button is opaque (:hover, :focus-within, .is-active, coarse pointers), which
+   contradicts spec.md:628 ("`.title`: 13px/16px, weight 500, ellipsis"). */
+.card-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--vt-head-height);
+  padding-right: 24px;
+  min-width: 0;
+}
+
+.unread-dot {
+  display: none;
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--vt-accent);
+}
+
+.is-unread > .card-head > .unread-dot { display: block; }
+
+.favicon,
+.favicon-fallback {
+  width: var(--vt-favicon);
+  height: var(--vt-favicon);
+  flex: none;
+  border-radius: 2px;
+  object-fit: contain;
+}
+
+.favicon-fallback { color: var(--vt-text-muted); }
+
+.spinner {
+  display: none;
+  width: var(--vt-favicon);
+  height: var(--vt-favicon);
+  flex: none;
+  border: 2px solid var(--vt-placeholder-icon);
+  border-top-color: var(--vt-text-muted);
+  border-radius: 50%;
+  animation: vt-spin .8s linear infinite;
+}
+
+.is-loading > .card-head > .favicon,
+.is-loading > .card-head > .favicon-fallback { display: none; }
+.is-loading > .card-head > .spinner { display: block; }
+
+@keyframes vt-spin { to { transform: rotate(360deg); } }
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--vt-title-size);
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--vt-text);
+}
+
+.is-active > .card-head > .title { font-weight: 600; }
+.is-discarded > .card-head > .title { font-style: italic; }
+
+.title mark {
+  background: color-mix(in srgb, var(--vt-focus) 45%, transparent);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.pin-badge {
+  flex: none;
+  display: inline-flex;
+  color: var(--vt-text-muted);
+}
+
+.pin-badge svg { width: 12px; height: 12px; }
+
+/* No `margin-right` here any more: `.card-head`'s own `padding-right` now reserves
+   the close button's lane for every child of the row, audio button included. */
+.card-head .audio {
+  width: 18px;
+  height: 18px;
+  color: var(--vt-text-muted);
+}
+
+.card-head .audio svg { width: 14px; height: 14px; }
+
+/* With a preview on screen, the sound control belongs ON it rather than as an 18 px
+   glyph beside the title, where it is easy to miss on a card that is mostly image.
+   `.tab-card` is the positioning context, and the preview is the only thing below the
+   head row, so the bottom-right corner lands inside it. When previews are turned off
+   there is nothing to overlay, and the button stays inline in the head row. */
+[data-thumbs="on"] .tab-card .audio {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .62);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+}
+
+[data-thumbs="on"] .tab-card .audio svg { width: 15px; height: 15px; }
+[data-thumbs="on"] .tab-card .audio:hover { background: rgba(0, 0, 0, .78); }
+[data-thumbs="on"] .is-muted > .card-head > .audio,
+[data-thumbs="on"] .is-audible > .card-head > .audio { color: #fff; opacity: 1; }
+.is-muted > .card-head > .audio { color: var(--vt-text-muted); opacity: .7; }
+.is-audible > .card-head > .audio { color: var(--vt-text); }
+
+/* The close button sits in the lane `.card-head`'s padding reserves for it, so
+   revealing it never reflows the head row and never covers the title.
+
+   `pointer-events: none` on the transparent state is deliberately NOT used. It
+   looks like the obvious guard, but Playwright resolves its hit-target check
+   before the pointer arrives — i.e. before `:hover` can restore the button — so it
+   makes the close button permanently unclickable to the suite (verified: 05-
+   interactions fails with "`.card-head` intercepts pointer events"), while buying
+   nothing with a mouse: the pointer cannot reach the button without hovering the
+   card, and the fade below is measured at 0.8 opacity after 25 ms. The device that
+   really can tap an invisible button is the coarse-pointer one, and the media
+   query below takes that case out by keeping the button visible there. */
+.card-head .close {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  opacity: 0;
+  background: var(--card-bg);
+  transition: opacity .1s, background-color .12s;
+}
+
+.card-head .close svg { width: 12px; height: 12px; }
+.card-head .close:hover { background: var(--vt-close-hover-bg); }
+
+.tab-card:hover .close,
+.tab-card:focus-within .close,
+.tab-card.is-active .close { opacity: 1; }
+
+/* `hover: none` describes the PRIMARY pointer only, so it misses a touchscreen
+   laptop that also has a trackpad — measured on exactly that configuration, a
+   finger tap on the invisible button closed the tab instead of activating it.
+   `any-pointer: coarse` matches whenever ANY attached pointer is a finger, which
+   is precisely the case that must not hide a destructive control. Mouse-only
+   machines are unaffected. Amends spec.md:628. */
+@media (hover: none), (any-pointer: coarse) {
+  .card-head .close { opacity: 1; }
+}
+
+/* ── Thumbnail ────────────────────────────────────────────────────────────── */
+
+.thumb {
+  position: relative;
+  display: grid;
+  margin-top: 4px;
+  aspect-ratio: var(--vt-thumb-aspect);
+  border-radius: var(--vt-thumb-radius);
+  background: var(--vt-thumb-bg);
+  overflow: hidden;
+  /* So the "cannot be previewed" placeholder can size itself against the card it
+     is in rather than the column count the user chose — the effective width is
+     what matters, and a narrow panel may be showing fewer columns than that. */
+  container-type: inline-size;
+  container-name: thumb;
+}
+
+[data-thumbs="off"] .thumb { display: none; }
+
+.thumb__img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  opacity: 0;
+  transition: opacity .18s;
+}
+
+.thumb--loaded .thumb__img,
+.thumb--stale .thumb__img { opacity: 1; }
+
+.thumb__placeholder {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  color: var(--vt-placeholder-icon);
+}
+
+.thumb--loaded .thumb__placeholder { display: none; }
+
+.thumb__favicon {
+  height: 40%;
+  width: auto;
+  max-width: 40%;
+  opacity: .45;
+  object-fit: contain;
+}
+
+.thumb__glyph {
+  width: 20px;
+  height: 20px;
+  color: var(--vt-placeholder-icon);
+}
+
+/* The label is empty (and `display:none`, being :empty) for every state except the
+   four terminal ones below, so it costs nothing on an ordinary card. */
+.thumb__label {
+  display: none;
+  max-width: 100%;
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 9px;
+  line-height: 12px;
+  font-weight: 500;
+  letter-spacing: .01em;
+}
+
+/* ── "This page can never have a preview" (spec-addendum A10 states) ───────────
+   Four reasons — a chrome:// or Web Store page, a host the user excluded, Chrome
+   withholding site access, a screenshot policy — all end with a card that can only
+   ever show a placeholder. It used to be a lock glyph at 18 % white multiplied by
+   `opacity: .40`, i.e. ~7 % effective alpha on #1f1f1f (1.1:1): a black rectangle
+   the user read as a broken preview.
+
+   Now the box takes the card's own tone with a faint hatch, so it reads as "there
+   is deliberately nothing here" rather than "a very dark screenshot", and carries a
+   legible lock plus a short reason. Quiet by design: no colour, no animation, one
+   grey — a window full of chrome:// tabs must not look like a wall of warnings.
+   The full sentence stays on the `title` tooltip. */
+.thumb--restricted,
+.thumb--excluded,
+.thumb--no-access,
+.thumb--policy {
+  display: grid;
+  place-items: center;
+  background-color: var(--vt-thumb-blocked-bg);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--vt-thumb-blocked-hatch) 0 1px,
+    transparent 1px 7px
+  );
+}
+
+.thumb--restricted .thumb__placeholder,
+.thumb--excluded .thumb__placeholder,
+.thumb--no-access .thumb__placeholder,
+.thumb--policy .thumb__placeholder {
+  gap: 2px;
+  align-content: center;
+  justify-items: center;
+  padding: 2px;
+  min-width: 0;
+  color: var(--vt-thumb-blocked-fg);
+}
+
+.thumb--restricted .thumb__glyph,
+.thumb--excluded .thumb__glyph,
+.thumb--no-access .thumb__glyph,
+.thumb--policy .thumb__glyph {
+  width: 14px;
+  height: 14px;
+  color: inherit;
+}
+
+.thumb--restricted .thumb__label,
+.thumb--excluded .thumb__label,
+.thumb--no-access .thumb__label,
+.thumb--policy .thumb__label { display: block; }
+
+/* Site access is the one reason the user can act on (the banner offers to fix it),
+   so its glyph carries the accent. The label stays grey so it keeps text-grade
+   contrast; the glyph is a non-text graphic and only owes WCAG 1.4.11's 3:1. */
+.thumb--no-access .thumb__glyph { color: var(--vt-thumb-blocked-alert); }
+
+/* Given room, the placeholder grows into it instead of sitting lost in the middle
+   of a 340 px box. Keyed off the preview's own width, so it follows the effective
+   column count rather than the setting. */
+@container thumb (min-width: 190px) {
+  .thumb--restricted .thumb__glyph,
+  .thumb--excluded .thumb__glyph,
+  .thumb--no-access .thumb__glyph,
+  .thumb--policy .thumb__glyph { width: 20px; height: 20px; }
+
+  .thumb--restricted .thumb__label,
+  .thumb--excluded .thumb__label,
+  .thumb--no-access .thumb__label,
+  .thumb--policy .thumb__label { font-size: 11px; line-height: 15px; }
+}
+
+.thumb--stale .thumb__img { opacity: .6; filter: grayscale(.4); }
+
+.thumb--capturing::after,
+.thumb--empty.is-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, var(--vt-shimmer) 50%, transparent 80%);
+  background-size: 220% 100%;
+  animation: vt-shimmer 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes vt-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -60% 0; }
+}
+
+/* ── Empty / count ────────────────────────────────────────────────────────── */
+
+.empty {
+  flex: none;
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--vt-text-muted);
+  font-size: 12px;
+}
+
+.count {
+  font-size: 11px;
+  color: var(--vt-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Bottom bar ───────────────────────────────────────────────────────────── */
+
+.bottombar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  height: var(--vt-bar-height);
+  padding: 0 8px;
+  border-top: 1px solid var(--vt-divider);
+  background: var(--vt-bg);
+}
+
+.bottombar .iconbtn { width: 28px; height: 28px; }
+
+/* The closed-tab count is 10 px text, so it needs the full 4.5:1. The ring keeps
+   the pill's own edge as visible against the bottom bar as the plain `--vt-accent`
+   fill used to be (3.6:1 dark / 3.5:1 light) now that the fill is darker. */
+.badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--vt-accent-strong);
+  box-shadow: 0 0 0 1px var(--vt-accent);
+  color: #fff;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+}
+
+/* ── Drop indicator (positioned by dnd.js) ────────────────────────────────── */
+
+.drop-indicator {
+  position: fixed;
+  z-index: 40;
+  height: 2px;
+  background: var(--vt-drop-color, var(--vt-accent));
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+/* ── Menus, popovers, drawer, confirm bar, toast ──────────────────────────── */
+
+.menu,
+.popover {
+  position: fixed;
+  z-index: 60;
+  min-width: 180px;
+  max-width: min(300px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--vt-card-border);
+  border-radius: 8px;
+  background: var(--vt-menu-bg);
+  box-shadow: var(--vt-shadow);
+  font-size: 13px;
+}
+
+.menu__item,
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vt-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.menu__item:hover,
+.menu__item:focus-visible,
+.menu__item.is-focused,
+.menu-item:hover { background: var(--vt-menu-hover); }
+
+.menu__item[aria-disabled="true"],
+.menu__item:disabled,
+.menu-item[aria-disabled="true"],
+.menu-item:disabled {
+  color: var(--vt-text-muted);
+  opacity: .55;
+  cursor: default;
+}
+
+.menu__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu__swatch {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.menu__chevron {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--vt-text-muted);
+}
+
+.menu__separator,
+.menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--vt-divider);
+}
+
+.menu__submenu {
+  position: fixed;
+  z-index: 61;
+}
+
+.drawer {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  width: 100%;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--vt-bg);
+  box-shadow: var(--vt-shadow);
+  transform: translateX(0);
+  transition: transform .16s ease-out;
+}
+
+.drawer[hidden] { display: none; }
+
+.confirm {
+  position: fixed;
+  z-index: 65;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--vt-bar-height);
+  padding: 6px 8px;
+  border-top: 1px solid var(--vt-divider);
+  background: var(--vt-menu-bg);
+  font-size: 12px;
+}
+
+.confirm[hidden] { display: none; }
+.confirm p { margin: 0; flex: 1 1 auto; }
+
+.toast {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: calc(var(--vt-bar-height) + 8px);
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  padding: 7px 12px;
+  border-radius: 6px;
+  background: var(--vt-menu-bg);
+  color: var(--vt-text);
+  box-shadow: var(--vt-shadow);
+  font-size: 12px;
+  text-align: center;
+}
+
+.toast[hidden] { display: none; }
+
+/* ── Closed-tabs popover (trash.js) ───────────────────────────────────────── */
+
+.popover__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vt-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.popover__item:hover,
+.popover__item:focus-visible { background: var(--vt-menu-hover); }
+
+.popover__favicon,
+.popover__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  object-fit: contain;
+  color: var(--vt-text-muted);
+}
+
+.popover__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popover__time {
+  flex: none;
+  font-size: 11px;
+  color: var(--vt-text-muted);
+}
+
+.popover__empty {
+  padding: 10px 8px;
+  color: var(--vt-text-muted);
+  text-align: center;
+}
+
+/* ── Settings drawer (settings-view.js) ───────────────────────────────────── */
+
+.drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.drawer__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.drawer__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 16px;
+}
+
+.drawer__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--vt-card-border);
+  border-radius: var(--vt-card-radius);
+  background: var(--vt-card);
+}
+
+.drawer__section-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--vt-text-muted);
+}
+
+.drawer__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.drawer__row--select,
+.drawer__row--number { justify-content: space-between; }
+
+.drawer__row--textarea { flex-direction: column; align-items: stretch; }
+
+.drawer__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.drawer__row--checkbox .drawer__label { order: 2; }
+
+.drawer__row input[type="checkbox"] {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--vt-accent);
+  cursor: pointer;
+}
+
+.drawer__row select,
+.drawer__row input[type="number"],
+.drawer__row textarea {
+  flex: 0 1 auto;
+  max-width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--vt-input-border);
+  border-radius: 4px;
+  background: var(--vt-input-bg);
+  color: var(--vt-text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.drawer__row input[type="number"] { width: 68px; }
+.drawer__row textarea { width: 100%; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.drawer__help,
+.drawer__stats,
+.drawer__version {
+  margin: 0;
+  font-size: 11px;
+  color: var(--vt-text-muted);
+  flex: 1 1 100%;
+}
+
+.drawer__button {
+  align-self: flex-start;
+  padding: 5px 10px;
+  border: 1px solid var(--vt-input-border);
+  border-radius: 5px;
+  background: var(--vt-menu-bg);
+  color: var(--vt-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.drawer__button:hover { background: var(--vt-menu-hover); }
+
+.drawer__link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--vt-focus);
+  font-size: 12px;
+  text-align: start;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.drawer__shortcuts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.drawer__shortcuts dt { color: var(--vt-text-muted); }
+.drawer__shortcuts dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* ── Confirm bar (toast.js) ───────────────────────────────────────────────── */
+
+.confirm__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.confirm__cancel,
+.confirm__ok {
+  flex: none;
+  padding: 5px 10px;
+  border: 1px solid var(--vt-input-border);
+  border-radius: 5px;
+  background: var(--vt-menu-bg);
+  color: var(--vt-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.confirm__cancel:hover,
+.confirm__ok:hover { background: var(--vt-menu-hover); }
+
+.confirm__ok {
+  border-color: transparent;
+  background: var(--vt-focus);
+  color: #10243e;
+  font-weight: 600;
+}
+
+/* Darker fill so the 12 px label clears 4.5:1 (3.95 → 5.62); the border keeps the
+   plain accent so the button's outline still separates it from the confirm bar
+   exactly as well as before (3.6:1 dark / 3.5:1 light). */
+.confirm--danger .confirm__ok {
+  border-color: var(--vt-accent);
+  background: var(--vt-accent-strong);
+  color: #ffffff;
+}
+
+/* ── Inline group rename (context-menu.js) ────────────────────────────────── */
+
+.group-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--vt-input-border);
+  border-radius: 3px;
+  background: var(--vt-input-bg);
+  color: var(--vt-text);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* ── Search-filter helpers (search.js) ────────────────────────────────────── */
+
+.pinned.is-filtered-empty { display: none !important; }
+
+/* ── Toast visibility (toast.js adds .is-visible alongside [hidden]) ──────── */
+
+.toast {
+  opacity: 0;
+  transition: opacity .15s ease-out;
+}
+
+.toast.is-visible { opacity: 1; }
+
+/* ── Reduced motion (spec-addendum A15.7) ─────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .thumb--capturing::after { animation: none; opacity: .35; }
+  .drawer { transform: none !important; }
+}
+
+/* ── Matches in other windows (search.js) ────────────────────────────────────
+   Sits between the list and the bottom bar, takes at most a third of the panel and
+   scrolls inside that, so a search with many hits elsewhere can never push the tab
+   list — the thing the panel is for — out of view. */
+.otherwin {
+  flex: 0 0 auto;
+  max-height: 33%;
+  overflow-y: auto;
+  border-top: 1px solid var(--vt-divider);
+  background: var(--vt-bg);
+}
+
+.otherwin__heading {
+  position: sticky;
+  top: 0;
+  margin: 0;
+  padding: 6px 10px 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--vt-text-muted);
+  background: inherit;
+}
+
+.otherwin__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--vt-text-muted);
+}
+
+.otherwin__list { display: flex; flex-direction: column; }
+
+.otherwin__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--vt-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.otherwin__row:hover { background: var(--vt-menu-hover); }
+.otherwin__row:focus-visible { outline: 2px solid var(--vt-focus); outline-offset: -2px; }
+
+.otherwin__favicon { flex: 0 0 auto; width: 16px; height: 16px; border-radius: 2px; }
+
+.otherwin__text { min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+
+.otherwin__title-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.otherwin__host {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  color: var(--vt-text-muted);
+}
+
+/* ── Locked tabs (locks.js) ──────────────────────────────────────────────────
+   The badge takes the place the close button had, so a locked card is the same
+   width as every other one and the row does not reflow when a lock is toggled. */
+.lock-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--vt-text-muted);
+}
+.lock-badge .icon { width: 12px; height: 12px; }
+.tab-card.is-locked .card-head { padding-right: 2px; }
+
+/* ── Command palette (palette.js) ────────────────────────────────────────────
+   Anchored near the top rather than centred: the list grows downwards, so the input
+   stays where the eye already is while the results change under it. */
+.palette {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 8vh 8px 8px;
+  background: rgba(0, 0, 0, .35);
+}
+
+.palette__box {
+  width: min(100%, 420px);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--vt-menu-bg);
+  border: 1px solid var(--vt-divider);
+  border-radius: 8px;
+  box-shadow: var(--vt-shadow);
+  overflow: hidden;
+}
+
+.palette__input {
+  flex: 0 0 auto;
+  padding: 9px 11px;
+  border: 0;
+  border-bottom: 1px solid var(--vt-divider);
+  background: var(--vt-input-bg);
+  color: var(--vt-text);
+  font: inherit;
+  font-size: 13px;
+}
+.palette__input:focus { outline: none; }
+
+.palette__list { overflow-y: auto; display: flex; flex-direction: column; }
+
+.palette__row {
+  padding: 7px 11px;
+  border: 0;
+  background: transparent;
+  color: var(--vt-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.palette__row:hover { background: var(--vt-menu-hover); }
+.palette__row[aria-selected="true"] { background: var(--vt-menu-hover); box-shadow: inset 2px 0 0 var(--vt-accent); }
+
+.palette__empty { padding: 10px 11px; font-size: 12px; color: var(--vt-text-muted); }
+
+/* ── Row lists in the tools column (windows.js, recent.js) ─────────────────── */
+.w-rows { display: flex; flex-direction: column; gap: 1px; }
+
+.w-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 5px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vt-text);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.w-row:hover:not(:disabled) { background: var(--vt-menu-hover); }
+.w-row:focus-visible { outline: 2px solid var(--vt-focus); outline-offset: -2px; }
+.w-row:disabled { cursor: default; opacity: .75; }
+.w-row[data-current="1"] { box-shadow: inset 2px 0 0 var(--vt-accent); }
+
+.w-row__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.w-row__aside {
+  flex: 0 0 auto;
+  color: var(--vt-text-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+}
+
+/* The notes pad takes whatever height is left over, so the column ends at the bottom
+   of the panel instead of trailing off into dead space. */
+.rail .widget--scratchpad { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 120px; }
+.rail .widget--scratchpad .widget__body { flex: 1 1 auto; display: flex; }
+.rail .widget--scratchpad .w-pad { flex: 1 1 auto; height: auto; resize: none; }

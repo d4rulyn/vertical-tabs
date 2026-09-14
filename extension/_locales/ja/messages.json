@@ -1,0 +1,1166 @@
+{
+  "extName": {
+    "message": "縦型タブ",
+    "description": "Extension name, shown in chrome://extensions and the Web Store"
+  },
+  "extDescription": {
+    "message": "縦型のタブバーを、ページのプレビュー付きで Chrome のサイドパネルに表示します。",
+    "description": "Extension description"
+  },
+  "actionTitle": {
+    "message": "縦型タブを表示",
+    "description": "Toolbar button tooltip. Never embed a keyboard shortcut here: the real binding is added at runtime with actionTitleWithShortcut"
+  },
+  "actionTitleWithShortcut": {
+    "message": "縦型タブを表示（$SHORTCUT$）",
+    "description": "Toolbar button tooltip including the shortcut the user actually has",
+    "placeholders": {
+      "shortcut": {
+        "content": "$1",
+        "example": "Ctrl+Shift+E"
+      }
+    }
+  },
+  "cmdSearchTabs": {
+    "message": "縦型タブバーを開いてタブを検索",
+    "description": "Description of the search-tabs keyboard command in chrome://extensions/shortcuts"
+  },
+  "tabs": {
+    "message": "タブ",
+    "description": "Accessible name of the tab list"
+  },
+  "pinnedTabs": {
+    "message": "ピン留めしたタブ",
+    "description": "Accessible name of the pinned-tab grid"
+  },
+  "searchPlaceholder": {
+    "message": "タブを検索",
+    "description": "Placeholder and label of the search box"
+  },
+  "clearSearch": {
+    "message": "検索をクリア",
+    "description": "Button that empties the search box"
+  },
+  "otherWindows": {
+    "message": "他のウィンドウ",
+    "description": "Heading over search matches that live in a different window"
+  },
+  "searchNoResults": {
+    "message": "一致するタブはありません",
+    "description": "Shown when the filter hides every tab"
+  },
+  "searchCount": {
+    "message": "$M$ 個中 $N$ 個のタブ",
+    "description": "Match counter shown while filtering",
+    "placeholders": {
+      "n": {
+        "content": "$1",
+        "example": "2"
+      },
+      "m": {
+        "content": "$2",
+        "example": "40"
+      }
+    }
+  },
+  "searchCountOne": {
+    "message": "$M$ 個中 $N$ 個のタブ",
+    "description": "Match counter shown while filtering a window that holds exactly one tab (M is 1). Japanese has no plural inflection, so this deliberately matches searchCount.",
+    "placeholders": {
+      "n": {
+        "content": "$1",
+        "example": "1"
+      },
+      "m": {
+        "content": "$2",
+        "example": "1"
+      }
+    }
+  },
+  "unreadTab": {
+    "message": "未読",
+    "description": "Screen-reader text on a tab that was opened in the background and not seen yet"
+  },
+  "newTab": {
+    "message": "新しいタブ",
+    "description": "New-tab button and menu item"
+  },
+  "newTabTooltip": {
+    "message": "新しいタブ（中クリック: バックグラウンドで開く）",
+    "description": "Tooltip of the new-tab button"
+  },
+  "popOut": {
+    "message": "別ウィンドウで開く",
+    "description": "Aria label for the pop-out button"
+  },
+  "popOutTooltip": {
+    "message": "このタブ一覧を独立したウィンドウで開きます。サイドパネルより細くできます。",
+    "description": "Tooltip for the pop-out button"
+  },
+  "lockTab": {
+    "message": "このタブをロック",
+    "description": "Context-menu item that protects a tab from the panel's own close actions"
+  },
+  "unlockTab": {
+    "message": "このタブのロックを解除",
+    "description": "Context-menu item that removes the lock"
+  },
+  "lockNTabs": {
+    "message": "$COUNT$ 個のタブをロック",
+    "description": "Context-menu item for a selection",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "unlockNTabs": {
+    "message": "$COUNT$ 個のタブのロックを解除",
+    "description": "Context-menu item for a selection",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "lockedTabTooltip": {
+    "message": "ロック中。このパネルからは閉じられません。Chrome のタブの × では閉じられます。",
+    "description": "Tooltip on the lock badge, stating exactly how far the lock reaches"
+  },
+  "lockedTabKept": {
+    "message": "ロック中のタブを 1 つ残しました。",
+    "description": "Toast when a close request included one locked tab"
+  },
+  "lockedTabsKept": {
+    "message": "ロック中のタブを $COUNT$ 個残しました。",
+    "description": "Toast when a close request included several",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "closeTab": {
+    "message": "タブを閉じる",
+    "description": "Close button on a card, and menu item"
+  },
+  "closeNTabs": {
+    "message": "$COUNT$ 個のタブを閉じる",
+    "description": "Menu item when several selected tabs would be closed",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "closeOtherTabs": {
+    "message": "他のタブを閉じる",
+    "description": "Context-menu item"
+  },
+  "closeTabsBelow": {
+    "message": "下のタブを閉じる",
+    "description": "Context-menu item"
+  },
+  "closeGroup": {
+    "message": "グループを閉じる",
+    "description": "Context-menu item"
+  },
+  "reload": {
+    "message": "再読み込み",
+    "description": "Context-menu item"
+  },
+  "duplicate": {
+    "message": "複製",
+    "description": "Context-menu item"
+  },
+  "pinTab": {
+    "message": "タブをピン留め",
+    "description": "Context-menu item"
+  },
+  "unpinTab": {
+    "message": "ピン留めを解除",
+    "description": "Context-menu item"
+  },
+  "muteTab": {
+    "message": "タブをミュート",
+    "description": "Context-menu item"
+  },
+  "unmuteTab": {
+    "message": "ミュートを解除",
+    "description": "Context-menu item"
+  },
+  "hibernateTab": {
+    "message": "タブを休止",
+    "description": "Context-menu item that discards the tab to free memory"
+  },
+  "hibernated": {
+    "message": "休止中",
+    "description": "Tooltip suffix on a discarded tab"
+  },
+  "addToNewGroup": {
+    "message": "新しいグループに追加",
+    "description": "Context-menu item"
+  },
+  "addToGroup": {
+    "message": "グループに追加",
+    "description": "Context-menu submenu"
+  },
+  "removeFromGroup": {
+    "message": "グループから外す",
+    "description": "Context-menu item"
+  },
+  "moveToNewWindow": {
+    "message": "新しいウィンドウに移動",
+    "description": "Context-menu item"
+  },
+  "copyUrl": {
+    "message": "リンクのアドレスをコピー",
+    "description": "Context-menu item"
+  },
+  "cmdPalette": {
+    "message": "コマンド",
+    "description": "Accessible name of the command palette"
+  },
+  "cmdPalettePlaceholder": {
+    "message": "コマンドを入力",
+    "description": "Palette input placeholder"
+  },
+  "cmdPaletteEmpty": {
+    "message": "一致するコマンドがありません",
+    "description": "Palette empty state"
+  },
+  "cmdNewTab": {
+    "message": "新しいタブ",
+    "description": "Palette command"
+  },
+  "cmdSearch": {
+    "message": "タブを検索",
+    "description": "Palette command"
+  },
+  "cmdReload": {
+    "message": "このタブを再読み込み",
+    "description": "Palette command"
+  },
+  "cmdDuplicate": {
+    "message": "このタブを複製",
+    "description": "Palette command"
+  },
+  "cmdPin": {
+    "message": "このタブをピン留め",
+    "description": "Palette command"
+  },
+  "cmdUnpin": {
+    "message": "このタブのピン留めを解除",
+    "description": "Palette command"
+  },
+  "cmdMute": {
+    "message": "このタブをミュート",
+    "description": "Palette command"
+  },
+  "cmdUnmute": {
+    "message": "このタブのミュートを解除",
+    "description": "Palette command"
+  },
+  "cmdLock": {
+    "message": "このタブをロック",
+    "description": "Palette command"
+  },
+  "cmdUnlock": {
+    "message": "このタブのロックを解除",
+    "description": "Palette command"
+  },
+  "cmdCopyUrl": {
+    "message": "このタブの URL をコピー",
+    "description": "Palette command"
+  },
+  "cmdMoveToNewWindow": {
+    "message": "このタブを新しいウィンドウへ移動",
+    "description": "Palette command"
+  },
+  "cmdCloseTab": {
+    "message": "このタブを閉じる",
+    "description": "Palette command"
+  },
+  "cmdReopenClosed": {
+    "message": "最後に閉じたタブを開き直す",
+    "description": "Palette command"
+  },
+  "cmdPopOut": {
+    "message": "一覧を別ウィンドウで開く",
+    "description": "Palette command"
+  },
+  "cmdSettings": {
+    "message": "設定",
+    "description": "Palette command"
+  },
+  "copied": {
+    "message": "コピーしました",
+    "description": "Toast after copying a link"
+  },
+  "copyFailed": {
+    "message": "コピーできませんでした",
+    "description": "Toast when copying fails"
+  },
+  "refreshPreview": {
+    "message": "プレビューを更新",
+    "description": "Context-menu item that recaptures the preview of the active tab"
+  },
+  "reopenClosedTab": {
+    "message": "閉じたタブを開く",
+    "description": "Context-menu item"
+  },
+  "closedTabs": {
+    "message": "閉じたタブ",
+    "description": "Trash button and popover title"
+  },
+  "closedTabsEmpty": {
+    "message": "最近閉じたタブはありません",
+    "description": "Empty trash list"
+  },
+  "closedWindow": {
+    "message": "ウィンドウ（$COUNT$ 個のタブ）",
+    "description": "Trash entry for a closed window",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "closedWindowOne": {
+    "message": "ウィンドウ（$COUNT$ 個のタブ）",
+    "description": "Trash entry for a closed window that held exactly one tab. Japanese has no plural inflection, so this deliberately matches closedWindow.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "restoreTab": {
+    "message": "$TITLE$ を開き直す",
+    "description": "Accessible name of a row in the closed-tabs list",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Example page"
+      }
+    }
+  },
+  "restoreFailed": {
+    "message": "このタブを復元できませんでした",
+    "description": "Toast when chrome.sessions.restore fails"
+  },
+  "operationFailed": {
+    "message": "操作を完了できませんでした。もう一度お試しください。",
+    "description": "Toast after a failed tab operation"
+  },
+  "groupMoveInvalid": {
+    "message": "グループは他のグループの中やピン留めタブの間には置けません。",
+    "description": "Toast when Chrome rejects a group move"
+  },
+  "groupUntitled": {
+    "message": "名前のないグループ",
+    "description": "Label for a group with no title"
+  },
+  "groupRename": {
+    "message": "グループ名を変更",
+    "description": "Group context-menu item"
+  },
+  "groupColor": {
+    "message": "色を変更",
+    "description": "Group context-menu submenu"
+  },
+  "groupCollapse": {
+    "message": "グループを折りたたむ",
+    "description": "Group context-menu item"
+  },
+  "groupExpand": {
+    "message": "グループを展開",
+    "description": "Group context-menu item"
+  },
+  "groupUngroup": {
+    "message": "グループを解除",
+    "description": "Group context-menu item"
+  },
+  "groupNewTab": {
+    "message": "グループに新しいタブ",
+    "description": "Group context-menu item"
+  },
+  "groupTabCount": {
+    "message": "$COUNT$ 個のタブ",
+    "description": "Tab counter on a group header",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "4"
+      }
+    }
+  },
+  "groupTabCountOne": {
+    "message": "$COUNT$ 個のタブ",
+    "description": "Tab counter on a group header holding exactly one tab. Japanese has no plural inflection, so this deliberately matches groupTabCount.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "colorGrey": {
+    "message": "グレー",
+    "description": "Tab-group colour name"
+  },
+  "colorBlue": {
+    "message": "青",
+    "description": "Tab-group colour name"
+  },
+  "colorRed": {
+    "message": "赤",
+    "description": "Tab-group colour name"
+  },
+  "colorYellow": {
+    "message": "黄",
+    "description": "Tab-group colour name"
+  },
+  "colorGreen": {
+    "message": "緑",
+    "description": "Tab-group colour name"
+  },
+  "colorPink": {
+    "message": "ピンク",
+    "description": "Tab-group colour name"
+  },
+  "colorPurple": {
+    "message": "紫",
+    "description": "Tab-group colour name"
+  },
+  "colorCyan": {
+    "message": "シアン",
+    "description": "Tab-group colour name"
+  },
+  "colorOrange": {
+    "message": "オレンジ",
+    "description": "Tab-group colour name"
+  },
+  "audioPlaying": {
+    "message": "音声を再生中（クリックでミュート）",
+    "description": "Audio button on a card that is making sound"
+  },
+  "audioMuted": {
+    "message": "ミュート中（クリックで解除）",
+    "description": "Audio button on a muted card"
+  },
+  "loading": {
+    "message": "読み込み中…",
+    "description": "Card state while the page is loading"
+  },
+  "previewPending": {
+    "message": "プレビューはこのタブを表示した後に作成されます",
+    "description": "Tooltip on a placeholder preview"
+  },
+  "previewCapturing": {
+    "message": "プレビューを作成中…",
+    "description": "Tooltip while a capture is in flight"
+  },
+  "previewUnavailable": {
+    "message": "このページのプレビューは作成できません",
+    "description": "Tooltip on pages Chrome refuses to screenshot, such as chrome:// pages"
+  },
+  "previewExcluded": {
+    "message": "このサイトではプレビューを作成しません",
+    "description": "Tooltip on a site the user added to the exclusion list"
+  },
+  "previewIncognito": {
+    "message": "シークレットウィンドウではプレビューを作成しません",
+    "description": "Tooltip on the preview box of a tab in a private window"
+  },
+  "previewNoSiteAccess": {
+    "message": "この拡張機能にこのサイトの読み取りが許可されていないため、プレビューを作成できません",
+    "description": "Tooltip when site access is withheld"
+  },
+  "previewUnavailableShort": {
+    "message": "プレビュー不可",
+    "description": "Short label drawn inside the preview box of a page Chrome refuses to screenshot"
+  },
+  "previewExcludedShort": {
+    "message": "プレビュー無効",
+    "description": "Short label drawn inside the preview box of a site the user excluded"
+  },
+  "previewIncognitoShort": {
+    "message": "プレビュー不可",
+    "description": "Short label on the preview box of a tab in a private window"
+  },
+  "previewNoSiteAccessShort": {
+    "message": "アクセス不可",
+    "description": "Short label drawn inside the preview box when Chrome withholds site access"
+  },
+  "previewDisabledByPolicyShort": {
+    "message": "ポリシーで無効",
+    "description": "Short label drawn inside the preview box when a policy disables screenshots"
+  },
+  "previewDisabledByPolicy": {
+    "message": "ポリシーによりスクリーンショットが無効化されています",
+    "description": "Tooltip when an administrator policy blocks screenshots"
+  },
+  "previewStale": {
+    "message": "前のページのプレビュー",
+    "description": "Tooltip on an out-of-date preview kept while the new page loads"
+  },
+  "bannerScreenshotsDisabled": {
+    "message": "このパソコンではポリシーによりスクリーンショットが無効化されているため、プレビューを一時停止しています。",
+    "description": "Banner shown while a policy blocks screenshots"
+  },
+  "bannerSiteAccess": {
+    "message": "この拡張機能にウェブサイトへのアクセスが許可されていないため、プレビューを作成できません。サイトへのアクセスを「すべてのサイト」に設定してください。",
+    "description": "Banner shown when the user or an administrator withheld site access"
+  },
+  "bannerSiteAccessOpen": {
+    "message": "拡張機能の設定を開く",
+    "description": "Button that opens this extension's details page"
+  },
+  "confirmCloseMany": {
+    "message": "$COUNT$ 個のタブを閉じますか？",
+    "description": "Confirmation before a bulk close",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "7"
+      }
+    }
+  },
+  "confirmClose": {
+    "message": "閉じる",
+    "description": "Confirm button of the bulk-close confirmation"
+  },
+  "confirmClearCache": {
+    "message": "保存済みのプレビューをすべて削除しますか？",
+    "description": "Confirmation before clearing the preview cache"
+  },
+  "confirmDelete": {
+    "message": "削除",
+    "description": "Confirm button of a destructive confirmation"
+  },
+  "cacheCleared": {
+    "message": "保存済みのプレビューを削除しました",
+    "description": "Toast after the preview cache was cleared"
+  },
+  "cancel": {
+    "message": "キャンセル",
+    "description": "Cancel button"
+  },
+  "dismiss": {
+    "message": "閉じる",
+    "description": "Button that hides a banner"
+  },
+  "settings": {
+    "message": "設定",
+    "description": "Settings button and drawer title"
+  },
+  "settingsAppearance": {
+    "message": "外観",
+    "description": "Settings section"
+  },
+  "settingsBehavior": {
+    "message": "動作",
+    "description": "Settings section"
+  },
+  "settingsPreviews": {
+    "message": "プレビュー",
+    "description": "Settings section"
+  },
+  "settingsTheme": {
+    "message": "テーマ",
+    "description": "Settings control"
+  },
+  "themeSystem": {
+    "message": "システムに合わせる",
+    "description": "Theme option"
+  },
+  "themeDark": {
+    "message": "ダーク",
+    "description": "Theme option"
+  },
+  "themeLight": {
+    "message": "ライト",
+    "description": "Theme option"
+  },
+  "settingsColumns": {
+    "message": "列数",
+    "description": "Settings control: how many columns of tab cards the panel shows"
+  },
+  "settingsColumnsHelp": {
+    "message": "パネルの幅が足りないときは、収まる分だけの列数で表示します。",
+    "description": "Help text under the column-count control"
+  },
+  "settingsCardWidth": {
+    "message": "カードの大きさ",
+    "description": "Settings label for the card width cap"
+  },
+  "settingsCardWidthHelp": {
+    "message": "パネル自体の幅は Chrome が最小 360 px で固定していて、拡張機能からは変更できません。大きさを選ぶと、その幅のカードが入るだけ並び、余白が出ません。",
+    "description": "Help text under the card width select"
+  },
+  "widgets": {
+    "message": "ツール",
+    "description": "Aria label for the widget rail"
+  },
+  "settingsWidgets": {
+    "message": "ツール",
+    "description": "Settings section heading for the widget rail"
+  },
+  "settingsWidgetsHelp": {
+    "message": "パネルは 360 px より細くできないため、タブの横に空く分をここで使います。いずれもネットワークを使いません。すべて外すと列ごと消えます。",
+    "description": "Help text under the widget list"
+  },
+  "widgetListIO": {
+    "message": "一覧の出し入れ",
+    "description": "Tool heading"
+  },
+  "widgetListIOCopy": {
+    "message": "Markdown でコピー",
+    "description": "Button copying the window's tabs as a Markdown list"
+  },
+  "widgetListIOOpen": {
+    "message": "リンクをまとめて開く",
+    "description": "Button opening every link found in the box"
+  },
+  "widgetListIOPlaceholder": {
+    "message": "リンクを貼り付け",
+    "description": "Placeholder of the bulk-open box"
+  },
+  "widgetListIONothing": {
+    "message": "コピーできるページがありません。",
+    "description": "Toast when no tab has an http(s) URL"
+  },
+  "widgetListIOCopied": {
+    "message": "$COUNT$ 個のタブをコピーしました。",
+    "description": "Toast after copying",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetListIOOpened": {
+    "message": "$COUNT$ 件のリンクを新しいウィンドウで開きました。",
+    "description": "Toast after a bulk open",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetNowPlaying": {
+    "message": "サウンド",
+    "description": "Widget name: tabs currently making sound"
+  },
+  "widgetNowPlayingEmpty": {
+    "message": "音を使っているタブはありません",
+    "description": "Shown when no tab is making sound"
+  },
+  "cardWidthFill": {
+    "message": "列いっぱい",
+    "description": "Card width option: no cap"
+  },
+  "cardWidth160": {
+    "message": "160 px",
+    "description": "Card width option"
+  },
+  "cardWidth200": {
+    "message": "200 px",
+    "description": "Card width option"
+  },
+  "cardWidth240": {
+    "message": "240 px",
+    "description": "Card width option"
+  },
+  "cardWidth280": {
+    "message": "280 px",
+    "description": "Card width option"
+  },
+  "cardWidth320": {
+    "message": "320 px",
+    "description": "Card width option"
+  },
+  "columns1": {
+    "message": "1 列",
+    "description": "Column-count option"
+  },
+  "columns2": {
+    "message": "2 列",
+    "description": "Column-count option"
+  },
+  "columns3": {
+    "message": "3 列",
+    "description": "Column-count option"
+  },
+  "columns4": {
+    "message": "4 列",
+    "description": "Column-count option"
+  },
+  "columns5": {
+    "message": "5 列",
+    "description": "Column-count option"
+  },
+  "settingsShowThumbnails": {
+    "message": "タブのプレビューを表示",
+    "description": "Settings toggle"
+  },
+  "settingsPinnedGrid": {
+    "message": "ピン留めタブをコンパクトなグリッドで表示",
+    "description": "Settings toggle"
+  },
+  "settingsMiddleClick": {
+    "message": "中クリックでタブを閉じる",
+    "description": "Settings toggle"
+  },
+  "settingsDoubleClickNewTab": {
+    "message": "空白部分のダブルクリックで新しいタブを開く",
+    "description": "Settings toggle"
+  },
+  "settingsUnreadDot": {
+    "message": "バックグラウンドで開いたタブに未読マークを付ける",
+    "description": "Settings toggle"
+  },
+  "settingsClickActiveSwitchesBack": {
+    "message": "アクティブタブのクリックで直前のタブに戻る",
+    "description": "Settings toggle"
+  },
+  "settingsConfirmThreshold": {
+    "message": "この数以上のタブをまとめて閉じるときは確認する",
+    "description": "Settings number input"
+  },
+  "settingsPreviewMoment": {
+    "message": "プレビューに写すもの",
+    "description": "Settings control choosing what moment of a page a preview shows"
+  },
+  "settingsPreviewMomentHelp": {
+    "message": "プレビューはページの見えている部分を写したものです。再読み込みすると Chrome が元の位置に戻すため、そこで撮ると本文の途中だけが写り、何のページか分からなくなります。",
+    "description": "Help text under the preview-moment control"
+  },
+  "previewMomentTop": {
+    "message": "ページの先頭",
+    "description": "Preview-moment option"
+  },
+  "previewMomentReload": {
+    "message": "読み込んだときの表示",
+    "description": "Preview-moment option"
+  },
+  "previewMomentInterval": {
+    "message": "いま見ている位置",
+    "description": "Preview-moment option"
+  },
+  "settingsRefresh": {
+    "message": "アクティブタブのプレビューを更新",
+    "description": "Settings control for the periodic refresh"
+  },
+  "refreshOff": {
+    "message": "タブ切り替え時のみ",
+    "description": "Refresh-interval option"
+  },
+  "refresh30s": {
+    "message": "30 秒ごと",
+    "description": "Refresh-interval option"
+  },
+  "refresh1m": {
+    "message": "1 分ごと",
+    "description": "Refresh-interval option"
+  },
+  "refresh5m": {
+    "message": "5 分ごと",
+    "description": "Refresh-interval option"
+  },
+  "settingsCaptureBeforeSwitch": {
+    "message": "切り替え前のタブのプレビューを更新する",
+    "description": "Settings toggle"
+  },
+  "settingsCaptureWhenClosed": {
+    "message": "タブバーを閉じている間もプレビューを作成する",
+    "description": "Settings toggle"
+  },
+  "settingsPersistThumbs": {
+    "message": "Chrome を再起動してもプレビューを保持する",
+    "description": "Settings toggle"
+  },
+  "settingsExcludedHosts": {
+    "message": "次のサイトではプレビューを作成しない",
+    "description": "Settings textarea"
+  },
+  "settingsExcludedHostsHelp": {
+    "message": "1 行に 1 つのホスト名。*.example.com でサブドメインも含めます。",
+    "description": "Help text under the excluded-hosts textarea"
+  },
+  "settingsCacheStats": {
+    "message": "$COUNT$ 件のプレビュー、$SIZE$ MB",
+    "description": "Size of the preview cache",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "128"
+      },
+      "size": {
+        "content": "$2",
+        "example": "14.2"
+      }
+    }
+  },
+  "settingsCacheStatsOne": {
+    "message": "$COUNT$ 件のプレビュー、$SIZE$ MB",
+    "description": "Size of the preview cache when it holds exactly one preview. Japanese has no plural inflection, so this deliberately matches settingsCacheStats.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      },
+      "size": {
+        "content": "$2",
+        "example": "0.1"
+      }
+    }
+  },
+  "settingsClearCache": {
+    "message": "プレビューのキャッシュを削除",
+    "description": "Button that deletes every stored preview"
+  },
+  "settingsShortcuts": {
+    "message": "キーボードショートカット",
+    "description": "Settings section"
+  },
+  "shortcutToggle": {
+    "message": "タブバーの表示 / 非表示",
+    "description": "Label of the _execute_action command"
+  },
+  "shortcutSearch": {
+    "message": "タブを検索",
+    "description": "Label of the search-tabs command"
+  },
+  "shortcutUnassigned": {
+    "message": "未割り当て",
+    "description": "Shown when a command has no shortcut"
+  },
+  "shortcutsOpenSettings": {
+    "message": "ショートカットを変更（chrome://extensions/shortcuts）",
+    "description": "Link to Chrome's keyboard-shortcut page"
+  },
+  "settingsAbout": {
+    "message": "このアプリについて",
+    "description": "Settings section"
+  },
+  "settingsReadme": {
+    "message": "ドキュメント（README）",
+    "description": "Link to the project documentation"
+  },
+  "version": {
+    "message": "バージョン $V$",
+    "description": "Extension version in the About section",
+    "placeholders": {
+      "v": {
+        "content": "$1",
+        "example": "1.0.0"
+      }
+    }
+  },
+  "sidePositionHint": {
+    "message": "このパネルは左側に表示されています。右側へ移動するには、Chrome の 設定 › デザイン でサイドパネルの位置を変更してください。",
+    "description": "One-time hint shown when Chrome docks the side panel on the left"
+  },
+  "sidePositionOpenSettings": {
+    "message": "Chrome の設定を開く",
+    "description": "Button of the side-position hint"
+  },
+  "openUrlManually": {
+    "message": "このアドレスを手動で開いてください: $URL$",
+    "description": "Toast when Chrome refuses to open an internal page for us",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "chrome://settings/appearance"
+      }
+    }
+  },
+  "timeJustNow": {
+    "message": "たった今",
+    "description": "Relative time in the closed-tabs list"
+  },
+  "timeMinutesAgo": {
+    "message": "$N$ 分前",
+    "description": "Relative time in the closed-tabs list",
+    "placeholders": {
+      "n": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+  "timeHoursAgo": {
+    "message": "$N$ 時間前",
+    "description": "Relative time in the closed-tabs list",
+    "placeholders": {
+      "n": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "timeDaysAgo": {
+    "message": "$N$ 日前",
+    "description": "Relative time in the closed-tabs list",
+    "placeholders": {
+      "n": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "welcomeTitle": {
+    "message": "縦型タブの準備ができました",
+    "description": "Welcome page title"
+  },
+  "welcomeOpen": {
+    "message": "ツールバーの拡張機能アイコンをクリックするか、$SHORTCUT$ を押してタブバーを開きます。",
+    "description": "Welcome page: how to open the panel",
+    "placeholders": {
+      "shortcut": {
+        "content": "$1",
+        "example": "Ctrl+Shift+E"
+      }
+    }
+  },
+  "welcomeOpenNow": {
+    "message": "今すぐタブバーを開く",
+    "description": "Welcome page button that opens the side panel straight away"
+  },
+  "welcomePin": {
+    "message": "ヒント: パズルアイコンのメニューからピン留めすると、アイコンが常に表示されます。",
+    "description": "Welcome page tip"
+  },
+  "welcomeSide": {
+    "message": "パネルの表示位置は Chrome が管理します。右側に表示するには、設定 › デザイン でサイドパネルの位置を変更してください。",
+    "description": "Welcome page: the side of the panel is a Chrome setting"
+  },
+  "welcomeChromeVerticalTabs": {
+    "message": "Chrome 標準の縦型タブが有効になっている場合は、タブ一覧が二重にならないよう無効にしてください。",
+    "description": "Welcome page: avoid two competing vertical tab lists"
+  },
+  "welcomePermissions": {
+    "message": "プレビューの作成には「すべてのウェブサイトのデータの読み取りと変更」の権限が必要です（Chrome がアクティブタブのスクリーンショットを許可するのはこの権限がある場合のみです）。プレビューはこのパソコン内にのみ保存され、送信されることはありません。",
+    "description": "Welcome page: why <all_urls> is requested"
+  },
+  "welcomeSettings": {
+    "message": "設定はタブバー内の歯車アイコンから開けます。",
+    "description": "Welcome page: where the settings are"
+  },
+  "widgetSessions": {
+    "message": "保存したタブ",
+    "description": "widgetSessions (widget)"
+  },
+  "widgetSessionsSave": {
+    "message": "このタブを保存",
+    "description": "widgetSessionsSave (widget)"
+  },
+  "widgetSessionsEmpty": {
+    "message": "まだ保存していません",
+    "description": "widgetSessionsEmpty (widget)"
+  },
+  "widgetSessionsSaved": {
+    "message": "$COUNT$ 件のタブを保存しました",
+    "description": "widgetSessionsSaved (widget)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetSessionsNothing": {
+    "message": "このウィンドウに保存できるページがありません",
+    "description": "widgetSessionsNothing (widget)"
+  },
+  "widgetSessionsDelete": {
+    "message": "この保存を削除",
+    "description": "widgetSessionsDelete (widget)"
+  },
+  "widgetRecent": {
+    "message": "最近使ったタブ",
+    "description": "Tool heading"
+  },
+  "widgetRecentNone": {
+    "message": "他に開いたタブがまだありません。",
+    "description": "Empty state"
+  },
+  "widgetRecentUnsupported": {
+    "message": "この Chrome はタブの最終使用時刻を記録していません。",
+    "description": "Shown when lastAccessed is missing"
+  },
+  "widgetWindows": {
+    "message": "開いているウィンドウ",
+    "description": "Tool heading"
+  },
+  "widgetWindowsAlone": {
+    "message": "ウィンドウはこれ 1 つだけです。",
+    "description": "Shown when one window is open"
+  },
+  "widgetWindowsUntitled": {
+    "message": "名前のないウィンドウ",
+    "description": "Fallback name for a window with no readable tab"
+  },
+  "widgetWindowsHere": {
+    "message": "$COUNT$・この中",
+    "description": "Tab count for the window this panel drives",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "agoNow": {
+    "message": "たった今",
+    "description": "Relative time, under a minute"
+  },
+  "agoMinutes": {
+    "message": "$N$ 分前",
+    "description": "Relative time in minutes",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "agoHours": {
+    "message": "$N$ 時間前",
+    "description": "Relative time in hours",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "agoDays": {
+    "message": "$N$ 日前",
+    "description": "Relative time in days",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetAutoGroup": {
+    "message": "サイトごとにまとめる",
+    "description": "Tool heading"
+  },
+  "widgetAutoGroupRun": {
+    "message": "まとめる",
+    "description": "Button that creates one tab group per site"
+  },
+  "widgetAutoGroupUndo": {
+    "message": "元に戻す",
+    "description": "Button that ungroups what the last run grouped"
+  },
+  "widgetAutoGroupNone": {
+    "message": "同じサイトのタブが 2 つ以上ある場所はありません。",
+    "description": "Shown when there is nothing to group"
+  },
+  "widgetAutoGroupFound": {
+    "message": "$SITES$ サイト・$TABS$ タブ",
+    "description": "How much the tool would group",
+    "placeholders": {
+      "sites": {
+        "content": "$1"
+      },
+      "tabs": {
+        "content": "$2"
+      }
+    }
+  },
+  "widgetAutoGroupDone": {
+    "message": "$COUNT$ 個のグループを作りました。",
+    "description": "Result toast",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetAutoGroupUndone": {
+    "message": "$COUNT$ 個のタブを戻しました。",
+    "description": "Undo toast",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetDuplicates": {
+    "message": "重複",
+    "description": "widgetDuplicates (widget)"
+  },
+  "widgetDuplicatesNone": {
+    "message": "重複して開いているページはありません",
+    "description": "widgetDuplicatesNone (widget)"
+  },
+  "widgetDuplicatesFound": {
+    "message": "重複が $COUNT$ 件",
+    "description": "widgetDuplicatesFound (widget)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetDuplicatesClose": {
+    "message": "重複を閉じる",
+    "description": "widgetDuplicatesClose (widget)"
+  },
+  "widgetDuplicatesClosed": {
+    "message": "$COUNT$ 件のタブを閉じました",
+    "description": "widgetDuplicatesClosed (widget)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetStale": {
+    "message": "放置中のタブ",
+    "description": "widgetStale (widget)"
+  },
+  "widgetStaleNone": {
+    "message": "放置しているタブはありません",
+    "description": "widgetStaleNone (widget)"
+  },
+  "widgetStaleFound": {
+    "message": "$COUNT$ 件が数日触られていません",
+    "description": "widgetStaleFound (widget)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetStaleDiscard": {
+    "message": "スリープさせる",
+    "description": "widgetStaleDiscard (widget)"
+  },
+  "widgetStaleDiscarded": {
+    "message": "$COUNT$ 件をスリープさせました",
+    "description": "widgetStaleDiscarded (widget)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetStaleUnsupported": {
+    "message": "この Chrome は最終使用時刻を通知しません",
+    "description": "widgetStaleUnsupported (widget)"
+  },
+  "widgetScratchpad": {
+    "message": "メモ",
+    "description": "widgetScratchpad (widget)"
+  },
+  "widgetScratchpadPlaceholder": {
+    "message": "タブを開いたままにして覚えておきたいことを",
+    "description": "widgetScratchpadPlaceholder (widget)"
+  }
+}

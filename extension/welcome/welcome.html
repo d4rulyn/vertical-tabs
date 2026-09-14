@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="welcomeTitle"></title>
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <img class="hero__icon" src="../icons/icon128.png" alt="" width="72" height="72">
+      <div>
+        <h1 class="hero__title" data-i18n="welcomeTitle"></h1>
+        <p class="hero__name" data-i18n="extName"></p>
+      </div>
+    </header>
+
+    <section class="card card--primary">
+      <p id="open-line" class="open-line"></p>
+      <div class="actions">
+        <button id="open-now" class="btn btn--primary" type="button" data-i18n="welcomeOpenNow"></button>
+      </div>
+    </section>
+
+    <section class="card">
+      <ul class="tips">
+        <li data-i18n="welcomePin"></li>
+        <li data-i18n="welcomeSide"></li>
+        <li data-i18n="welcomeChromeVerticalTabs"></li>
+        <li data-i18n="welcomeSettings"></li>
+      </ul>
+      <div class="actions">
+        <button id="open-appearance" class="btn" type="button" data-i18n="sidePositionOpenSettings"></button>
+      </div>
+      <p id="manual-url" class="manual-url" hidden></p>
+    </section>
+
+    <section class="card card--muted">
+      <p class="permissions" data-i18n="welcomePermissions"></p>
+    </section>
+
+    <footer class="foot">
+      <p id="version" class="version"></p>
+    </footer>
+  </main>
+
+  <script type="module" src="welcome.js"></script>
+</body>
+</html>

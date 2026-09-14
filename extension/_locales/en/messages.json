@@ -1,0 +1,1166 @@
+{
+  "extName": {
+    "message": "Vertical Tabs",
+    "description": "Extension name, shown in chrome://extensions and the Web Store"
+  },
+  "extDescription": {
+    "message": "A vertical tab bar with page previews in Chrome's side panel.",
+    "description": "Extension description"
+  },
+  "actionTitle": {
+    "message": "Show vertical tabs",
+    "description": "Toolbar button tooltip. Never embed a keyboard shortcut here: the real binding is added at runtime with actionTitleWithShortcut"
+  },
+  "actionTitleWithShortcut": {
+    "message": "Show vertical tabs ($SHORTCUT$)",
+    "description": "Toolbar button tooltip including the shortcut the user actually has",
+    "placeholders": {
+      "shortcut": {
+        "content": "$1",
+        "example": "Ctrl+Shift+E"
+      }
+    }
+  },
+  "cmdSearchTabs": {
+    "message": "Open the vertical tab bar and search tabs",
+    "description": "Description of the search-tabs keyboard command in chrome://extensions/shortcuts"
+  },
+  "tabs": {
+    "message": "Tabs",
+    "description": "Accessible name of the tab list"
+  },
+  "pinnedTabs": {
+    "message": "Pinned tabs",
+    "description": "Accessible name of the pinned-tab grid"
+  },
+  "searchPlaceholder": {
+    "message": "Search tabs",
+    "description": "Placeholder and label of the search box"
+  },
+  "clearSearch": {
+    "message": "Clear search",
+    "description": "Button that empties the search box"
+  },
+  "otherWindows": {
+    "message": "In other windows",
+    "description": "Heading over search matches that live in a different window"
+  },
+  "searchNoResults": {
+    "message": "No tabs match",
+    "description": "Shown when the filter hides every tab"
+  },
+  "searchCount": {
+    "message": "$N$ of $M$ tabs",
+    "description": "Match counter shown while filtering",
+    "placeholders": {
+      "n": {
+        "content": "$1",
+        "example": "2"
+      },
+      "m": {
+        "content": "$2",
+        "example": "40"
+      }
+    }
+  },
+  "searchCountOne": {
+    "message": "$N$ of $M$ tab",
+    "description": "Match counter shown while filtering a window that holds exactly one tab (M is 1). chrome.i18n has no plural rules, so the singular is a separate message; locales without plural inflection repeat the plural string here.",
+    "placeholders": {
+      "n": {
+        "content": "$1",
+        "example": "1"
+      },
+      "m": {
+        "content": "$2",
+        "example": "1"
+      }
+    }
+  },
+  "unreadTab": {
+    "message": "Unread",
+    "description": "Screen-reader text on a tab that was opened in the background and not seen yet"
+  },
+  "newTab": {
+    "message": "New tab",
+    "description": "New-tab button and menu item"
+  },
+  "newTabTooltip": {
+    "message": "New tab (middle-click: open in background)",
+    "description": "Tooltip of the new-tab button"
+  },
+  "popOut": {
+    "message": "Open in a window",
+    "description": "Aria label for the pop-out button"
+  },
+  "popOutTooltip": {
+    "message": "Open this tab list in its own window, which can be narrower than Chrome's side panel",
+    "description": "Tooltip for the pop-out button"
+  },
+  "lockTab": {
+    "message": "Lock this tab",
+    "description": "Context-menu item that protects a tab from the panel's own close actions"
+  },
+  "unlockTab": {
+    "message": "Unlock this tab",
+    "description": "Context-menu item that removes the lock"
+  },
+  "lockNTabs": {
+    "message": "Lock $COUNT$ tabs",
+    "description": "Context-menu item for a selection",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "unlockNTabs": {
+    "message": "Unlock $COUNT$ tabs",
+    "description": "Context-menu item for a selection",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "lockedTabTooltip": {
+    "message": "Locked. Nothing in this panel will close it; Chrome's own close button still will.",
+    "description": "Tooltip on the lock badge, stating exactly how far the lock reaches"
+  },
+  "lockedTabKept": {
+    "message": "A locked tab was kept.",
+    "description": "Toast when a close request included one locked tab"
+  },
+  "lockedTabsKept": {
+    "message": "$COUNT$ locked tabs were kept.",
+    "description": "Toast when a close request included several",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "closeTab": {
+    "message": "Close tab",
+    "description": "Close button on a card, and menu item"
+  },
+  "closeNTabs": {
+    "message": "Close $COUNT$ tabs",
+    "description": "Menu item when several selected tabs would be closed",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "closeOtherTabs": {
+    "message": "Close other tabs",
+    "description": "Context-menu item"
+  },
+  "closeTabsBelow": {
+    "message": "Close tabs below",
+    "description": "Context-menu item"
+  },
+  "closeGroup": {
+    "message": "Close group",
+    "description": "Context-menu item"
+  },
+  "reload": {
+    "message": "Reload",
+    "description": "Context-menu item"
+  },
+  "duplicate": {
+    "message": "Duplicate",
+    "description": "Context-menu item"
+  },
+  "pinTab": {
+    "message": "Pin tab",
+    "description": "Context-menu item"
+  },
+  "unpinTab": {
+    "message": "Unpin tab",
+    "description": "Context-menu item"
+  },
+  "muteTab": {
+    "message": "Mute tab",
+    "description": "Context-menu item"
+  },
+  "unmuteTab": {
+    "message": "Unmute tab",
+    "description": "Context-menu item"
+  },
+  "hibernateTab": {
+    "message": "Hibernate tab",
+    "description": "Context-menu item that discards the tab to free memory"
+  },
+  "hibernated": {
+    "message": "Hibernated",
+    "description": "Tooltip suffix on a discarded tab"
+  },
+  "addToNewGroup": {
+    "message": "Add to new group",
+    "description": "Context-menu item"
+  },
+  "addToGroup": {
+    "message": "Add to group",
+    "description": "Context-menu submenu"
+  },
+  "removeFromGroup": {
+    "message": "Remove from group",
+    "description": "Context-menu item"
+  },
+  "moveToNewWindow": {
+    "message": "Move to new window",
+    "description": "Context-menu item"
+  },
+  "copyUrl": {
+    "message": "Copy link address",
+    "description": "Context-menu item"
+  },
+  "cmdPalette": {
+    "message": "Commands",
+    "description": "Accessible name of the command palette"
+  },
+  "cmdPalettePlaceholder": {
+    "message": "Type a command",
+    "description": "Palette input placeholder"
+  },
+  "cmdPaletteEmpty": {
+    "message": "No command matches",
+    "description": "Palette empty state"
+  },
+  "cmdNewTab": {
+    "message": "New tab",
+    "description": "Palette command"
+  },
+  "cmdSearch": {
+    "message": "Search tabs",
+    "description": "Palette command"
+  },
+  "cmdReload": {
+    "message": "Reload this tab",
+    "description": "Palette command"
+  },
+  "cmdDuplicate": {
+    "message": "Duplicate this tab",
+    "description": "Palette command"
+  },
+  "cmdPin": {
+    "message": "Pin this tab",
+    "description": "Palette command"
+  },
+  "cmdUnpin": {
+    "message": "Unpin this tab",
+    "description": "Palette command"
+  },
+  "cmdMute": {
+    "message": "Mute this tab",
+    "description": "Palette command"
+  },
+  "cmdUnmute": {
+    "message": "Unmute this tab",
+    "description": "Palette command"
+  },
+  "cmdLock": {
+    "message": "Lock this tab",
+    "description": "Palette command"
+  },
+  "cmdUnlock": {
+    "message": "Unlock this tab",
+    "description": "Palette command"
+  },
+  "cmdCopyUrl": {
+    "message": "Copy this tab's address",
+    "description": "Palette command"
+  },
+  "cmdMoveToNewWindow": {
+    "message": "Move this tab to a new window",
+    "description": "Palette command"
+  },
+  "cmdCloseTab": {
+    "message": "Close this tab",
+    "description": "Palette command"
+  },
+  "cmdReopenClosed": {
+    "message": "Reopen the last closed tab",
+    "description": "Palette command"
+  },
+  "cmdPopOut": {
+    "message": "Open the list in its own window",
+    "description": "Palette command"
+  },
+  "cmdSettings": {
+    "message": "Settings",
+    "description": "Palette command"
+  },
+  "copied": {
+    "message": "Copied",
+    "description": "Toast after copying a link"
+  },
+  "copyFailed": {
+    "message": "Could not copy",
+    "description": "Toast when copying fails"
+  },
+  "refreshPreview": {
+    "message": "Refresh preview",
+    "description": "Context-menu item that recaptures the preview of the active tab"
+  },
+  "reopenClosedTab": {
+    "message": "Reopen closed tab",
+    "description": "Context-menu item"
+  },
+  "closedTabs": {
+    "message": "Closed tabs",
+    "description": "Trash button and popover title"
+  },
+  "closedTabsEmpty": {
+    "message": "No recently closed tabs",
+    "description": "Empty trash list"
+  },
+  "closedWindow": {
+    "message": "Window ($COUNT$ tabs)",
+    "description": "Trash entry for a closed window",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "closedWindowOne": {
+    "message": "Window ($COUNT$ tab)",
+    "description": "Trash entry for a closed window that held exactly one tab. chrome.i18n has no plural rules, so the singular is a separate message; locales without plural inflection repeat the plural string here.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "restoreTab": {
+    "message": "Reopen $TITLE$",
+    "description": "Accessible name of a row in the closed-tabs list",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Example page"
+      }
+    }
+  },
+  "restoreFailed": {
+    "message": "Could not restore this tab",
+    "description": "Toast when chrome.sessions.restore fails"
+  },
+  "operationFailed": {
+    "message": "Chrome could not complete that action. Try again.",
+    "description": "Toast after a failed tab operation"
+  },
+  "groupMoveInvalid": {
+    "message": "A group cannot be dropped inside another group or among pinned tabs.",
+    "description": "Toast when Chrome rejects a group move"
+  },
+  "groupUntitled": {
+    "message": "Unnamed group",
+    "description": "Label for a group with no title"
+  },
+  "groupRename": {
+    "message": "Rename group",
+    "description": "Group context-menu item"
+  },
+  "groupColor": {
+    "message": "Change color",
+    "description": "Group context-menu submenu"
+  },
+  "groupCollapse": {
+    "message": "Collapse group",
+    "description": "Group context-menu item"
+  },
+  "groupExpand": {
+    "message": "Expand group",
+    "description": "Group context-menu item"
+  },
+  "groupUngroup": {
+    "message": "Ungroup",
+    "description": "Group context-menu item"
+  },
+  "groupNewTab": {
+    "message": "New tab in group",
+    "description": "Group context-menu item"
+  },
+  "groupTabCount": {
+    "message": "$COUNT$ tabs",
+    "description": "Tab counter on a group header",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "4"
+      }
+    }
+  },
+  "groupTabCountOne": {
+    "message": "$COUNT$ tab",
+    "description": "Tab counter on a group header holding exactly one tab. chrome.i18n has no plural rules, so the singular is a separate message; locales without plural inflection repeat the plural string here.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "colorGrey": {
+    "message": "Grey",
+    "description": "Tab-group colour name"
+  },
+  "colorBlue": {
+    "message": "Blue",
+    "description": "Tab-group colour name"
+  },
+  "colorRed": {
+    "message": "Red",
+    "description": "Tab-group colour name"
+  },
+  "colorYellow": {
+    "message": "Yellow",
+    "description": "Tab-group colour name"
+  },
+  "colorGreen": {
+    "message": "Green",
+    "description": "Tab-group colour name"
+  },
+  "colorPink": {
+    "message": "Pink",
+    "description": "Tab-group colour name"
+  },
+  "colorPurple": {
+    "message": "Purple",
+    "description": "Tab-group colour name"
+  },
+  "colorCyan": {
+    "message": "Cyan",
+    "description": "Tab-group colour name"
+  },
+  "colorOrange": {
+    "message": "Orange",
+    "description": "Tab-group colour name"
+  },
+  "audioPlaying": {
+    "message": "Playing audio (click to mute)",
+    "description": "Audio button on a card that is making sound"
+  },
+  "audioMuted": {
+    "message": "Muted (click to unmute)",
+    "description": "Audio button on a muted card"
+  },
+  "loading": {
+    "message": "Loading…",
+    "description": "Card state while the page is loading"
+  },
+  "previewPending": {
+    "message": "The preview appears after this tab has been shown",
+    "description": "Tooltip on a placeholder preview"
+  },
+  "previewCapturing": {
+    "message": "Capturing preview…",
+    "description": "Tooltip while a capture is in flight"
+  },
+  "previewUnavailable": {
+    "message": "No preview is available for this page",
+    "description": "Tooltip on pages Chrome refuses to screenshot, such as chrome:// pages"
+  },
+  "previewExcluded": {
+    "message": "Previews are turned off for this site",
+    "description": "Tooltip on a site the user added to the exclusion list"
+  },
+  "previewIncognito": {
+    "message": "Previews are never made in a private window",
+    "description": "Tooltip on the preview box of a tab in a private window"
+  },
+  "previewNoSiteAccess": {
+    "message": "Chrome is not letting this extension read this site, so no preview can be made",
+    "description": "Tooltip when site access is withheld"
+  },
+  "previewUnavailableShort": {
+    "message": "No preview",
+    "description": "Short label drawn inside the preview box of a page Chrome refuses to screenshot"
+  },
+  "previewExcludedShort": {
+    "message": "Previews off",
+    "description": "Short label drawn inside the preview box of a site the user excluded"
+  },
+  "previewIncognitoShort": {
+    "message": "No preview",
+    "description": "Short label on the preview box of a tab in a private window"
+  },
+  "previewNoSiteAccessShort": {
+    "message": "No site access",
+    "description": "Short label drawn inside the preview box when Chrome withholds site access"
+  },
+  "previewDisabledByPolicyShort": {
+    "message": "Policy blocked",
+    "description": "Short label drawn inside the preview box when a policy disables screenshots"
+  },
+  "previewDisabledByPolicy": {
+    "message": "Screenshots are disabled by policy",
+    "description": "Tooltip when an administrator policy blocks screenshots"
+  },
+  "previewStale": {
+    "message": "Preview of the previous page",
+    "description": "Tooltip on an out-of-date preview kept while the new page loads"
+  },
+  "bannerScreenshotsDisabled": {
+    "message": "Screenshots are disabled by policy on this computer, so previews are paused.",
+    "description": "Banner shown while a policy blocks screenshots"
+  },
+  "bannerSiteAccess": {
+    "message": "Previews are unavailable because Chrome is withholding website access from this extension. Set its site access to \"On all sites\".",
+    "description": "Banner shown when the user or an administrator withheld site access"
+  },
+  "bannerSiteAccessOpen": {
+    "message": "Open extension settings",
+    "description": "Button that opens this extension's details page"
+  },
+  "confirmCloseMany": {
+    "message": "Close $COUNT$ tabs?",
+    "description": "Confirmation before a bulk close",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "7"
+      }
+    }
+  },
+  "confirmClose": {
+    "message": "Close",
+    "description": "Confirm button of the bulk-close confirmation"
+  },
+  "confirmClearCache": {
+    "message": "Delete all saved previews?",
+    "description": "Confirmation before clearing the preview cache"
+  },
+  "confirmDelete": {
+    "message": "Delete",
+    "description": "Confirm button of a destructive confirmation"
+  },
+  "cacheCleared": {
+    "message": "Saved previews deleted",
+    "description": "Toast after the preview cache was cleared"
+  },
+  "cancel": {
+    "message": "Cancel",
+    "description": "Cancel button"
+  },
+  "dismiss": {
+    "message": "Dismiss",
+    "description": "Button that hides a banner"
+  },
+  "settings": {
+    "message": "Settings",
+    "description": "Settings button and drawer title"
+  },
+  "settingsAppearance": {
+    "message": "Appearance",
+    "description": "Settings section"
+  },
+  "settingsBehavior": {
+    "message": "Behavior",
+    "description": "Settings section"
+  },
+  "settingsPreviews": {
+    "message": "Previews",
+    "description": "Settings section"
+  },
+  "settingsTheme": {
+    "message": "Theme",
+    "description": "Settings control"
+  },
+  "themeSystem": {
+    "message": "Follow system",
+    "description": "Theme option"
+  },
+  "themeDark": {
+    "message": "Dark",
+    "description": "Theme option"
+  },
+  "themeLight": {
+    "message": "Light",
+    "description": "Theme option"
+  },
+  "settingsColumns": {
+    "message": "Columns",
+    "description": "Settings control: how many columns of tab cards the panel shows"
+  },
+  "settingsColumnsHelp": {
+    "message": "When the panel is too narrow for the number you pick, it shows as many columns as fit.",
+    "description": "Help text under the column-count control"
+  },
+  "settingsCardWidth": {
+    "message": "Card size",
+    "description": "Settings label for the card width cap"
+  },
+  "settingsCardWidthHelp": {
+    "message": "Chrome fixes the panel's own width at 360 px minimum and an extension cannot change it. Choosing a card size fills the panel with as many cards of that size as fit, instead of one wide column.",
+    "description": "Help text under the card width select"
+  },
+  "widgets": {
+    "message": "Tools",
+    "description": "Aria label for the widget rail"
+  },
+  "settingsWidgets": {
+    "message": "Tools",
+    "description": "Settings section heading for the widget rail"
+  },
+  "settingsWidgetsHelp": {
+    "message": "Chrome will not let the panel be narrower than 360 px, so the space beside the tabs holds these instead. None of them uses the network. Untick them all to hide the column.",
+    "description": "Help text under the widget list"
+  },
+  "widgetListIO": {
+    "message": "List in and out",
+    "description": "Tool heading"
+  },
+  "widgetListIOCopy": {
+    "message": "Copy as Markdown",
+    "description": "Button copying the window's tabs as a Markdown list"
+  },
+  "widgetListIOOpen": {
+    "message": "Open these links",
+    "description": "Button opening every link found in the box"
+  },
+  "widgetListIOPlaceholder": {
+    "message": "Paste links here",
+    "description": "Placeholder of the bulk-open box"
+  },
+  "widgetListIONothing": {
+    "message": "No pages to copy.",
+    "description": "Toast when no tab has an http(s) URL"
+  },
+  "widgetListIOCopied": {
+    "message": "Copied $COUNT$ tabs.",
+    "description": "Toast after copying",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetListIOOpened": {
+    "message": "Opened $COUNT$ links in a new window.",
+    "description": "Toast after a bulk open",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetNowPlaying": {
+    "message": "Sound",
+    "description": "Widget name: tabs currently making sound"
+  },
+  "widgetNowPlayingEmpty": {
+    "message": "No tab is using sound",
+    "description": "Shown when no tab is making sound"
+  },
+  "cardWidthFill": {
+    "message": "Fill the column",
+    "description": "Card width option: no cap"
+  },
+  "cardWidth160": {
+    "message": "160 px",
+    "description": "Card width option"
+  },
+  "cardWidth200": {
+    "message": "200 px",
+    "description": "Card width option"
+  },
+  "cardWidth240": {
+    "message": "240 px",
+    "description": "Card width option"
+  },
+  "cardWidth280": {
+    "message": "280 px",
+    "description": "Card width option"
+  },
+  "cardWidth320": {
+    "message": "320 px",
+    "description": "Card width option"
+  },
+  "columns1": {
+    "message": "1 column",
+    "description": "Column-count option"
+  },
+  "columns2": {
+    "message": "2 columns",
+    "description": "Column-count option"
+  },
+  "columns3": {
+    "message": "3 columns",
+    "description": "Column-count option"
+  },
+  "columns4": {
+    "message": "4 columns",
+    "description": "Column-count option"
+  },
+  "columns5": {
+    "message": "5 columns",
+    "description": "Column-count option"
+  },
+  "settingsShowThumbnails": {
+    "message": "Show tab previews",
+    "description": "Settings toggle"
+  },
+  "settingsPinnedGrid": {
+    "message": "Show pinned tabs as a compact grid",
+    "description": "Settings toggle"
+  },
+  "settingsMiddleClick": {
+    "message": "Middle-click closes a tab",
+    "description": "Settings toggle"
+  },
+  "settingsDoubleClickNewTab": {
+    "message": "Double-click empty space to open a new tab",
+    "description": "Settings toggle"
+  },
+  "settingsUnreadDot": {
+    "message": "Mark tabs opened in the background as unread",
+    "description": "Settings toggle"
+  },
+  "settingsClickActiveSwitchesBack": {
+    "message": "Clicking the active tab switches to the previous tab",
+    "description": "Settings toggle"
+  },
+  "settingsConfirmThreshold": {
+    "message": "Ask before closing this many tabs at once",
+    "description": "Settings number input"
+  },
+  "settingsPreviewMoment": {
+    "message": "Previews show",
+    "description": "Settings control choosing what moment of a page a preview shows"
+  },
+  "settingsPreviewMomentHelp": {
+    "message": "A preview is a picture of the visible part of a page. Chrome puts you back where you were when a page reloads, so a preview taken then can be a band of body text that identifies nothing.",
+    "description": "Help text under the preview-moment control"
+  },
+  "previewMomentTop": {
+    "message": "The top of the page",
+    "description": "Preview-moment option"
+  },
+  "previewMomentReload": {
+    "message": "What it showed when it loaded",
+    "description": "Preview-moment option"
+  },
+  "previewMomentInterval": {
+    "message": "Wherever you are on the page",
+    "description": "Preview-moment option"
+  },
+  "settingsRefresh": {
+    "message": "Refresh the active tab's preview",
+    "description": "Settings control for the periodic refresh"
+  },
+  "refreshOff": {
+    "message": "Only when switching tabs",
+    "description": "Refresh-interval option"
+  },
+  "refresh30s": {
+    "message": "Every 30 seconds",
+    "description": "Refresh-interval option"
+  },
+  "refresh1m": {
+    "message": "Every minute",
+    "description": "Refresh-interval option"
+  },
+  "refresh5m": {
+    "message": "Every 5 minutes",
+    "description": "Refresh-interval option"
+  },
+  "settingsCaptureBeforeSwitch": {
+    "message": "Update the preview of the tab you are leaving",
+    "description": "Settings toggle"
+  },
+  "settingsCaptureWhenClosed": {
+    "message": "Capture previews while the tab bar is closed",
+    "description": "Settings toggle"
+  },
+  "settingsPersistThumbs": {
+    "message": "Keep previews after Chrome restarts",
+    "description": "Settings toggle"
+  },
+  "settingsExcludedHosts": {
+    "message": "Never capture previews on these sites",
+    "description": "Settings textarea"
+  },
+  "settingsExcludedHostsHelp": {
+    "message": "One host per line. Use *.example.com to include subdomains.",
+    "description": "Help text under the excluded-hosts textarea"
+  },
+  "settingsCacheStats": {
+    "message": "$COUNT$ previews, $SIZE$ MB",
+    "description": "Size of the preview cache",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "128"
+      },
+      "size": {
+        "content": "$2",
+        "example": "14.2"
+      }
+    }
+  },
+  "settingsCacheStatsOne": {
+    "message": "$COUNT$ preview, $SIZE$ MB",
+    "description": "Size of the preview cache when it holds exactly one preview. chrome.i18n has no plural rules, so the singular is a separate message; locales without plural inflection repeat the plural string here. English takes the plural at zero, so only 1 needs this form.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      },
+      "size": {
+        "content": "$2",
+        "example": "0.1"
+      }
+    }
+  },
+  "settingsClearCache": {
+    "message": "Clear preview cache",
+    "description": "Button that deletes every stored preview"
+  },
+  "settingsShortcuts": {
+    "message": "Keyboard shortcuts",
+    "description": "Settings section"
+  },
+  "shortcutToggle": {
+    "message": "Show or hide the tab bar",
+    "description": "Label of the _execute_action command"
+  },
+  "shortcutSearch": {
+    "message": "Search tabs",
+    "description": "Label of the search-tabs command"
+  },
+  "shortcutUnassigned": {
+    "message": "Not assigned",
+    "description": "Shown when a command has no shortcut"
+  },
+  "shortcutsOpenSettings": {
+    "message": "Change shortcuts (chrome://extensions/shortcuts)",
+    "description": "Link to Chrome's keyboard-shortcut page"
+  },
+  "settingsAbout": {
+    "message": "About",
+    "description": "Settings section"
+  },
+  "settingsReadme": {
+    "message": "Documentation (README)",
+    "description": "Link to the project documentation"
+  },
+  "version": {
+    "message": "Version $V$",
+    "description": "Extension version in the About section",
+    "placeholders": {
+      "v": {
+        "content": "$1",
+        "example": "1.0.0"
+      }
+    }
+  },
+  "sidePositionHint": {
+    "message": "Chrome is showing this panel on the left. To move it to the right, change the side panel position in Chrome settings › Appearance.",
+    "description": "One-time hint shown when Chrome docks the side panel on the left"
+  },
+  "sidePositionOpenSettings": {
+    "message": "Open Chrome settings",
+    "description": "Button of the side-position hint"
+  },
+  "openUrlManually": {
+    "message": "Open this address manually: $URL$",
+    "description": "Toast when Chrome refuses to open an internal page for us",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "chrome://settings/appearance"
+      }
+    }
+  },
+  "timeJustNow": {
+    "message": "just now",
+    "description": "Relative time in the closed-tabs list"
+  },
+  "timeMinutesAgo": {
+    "message": "$N$ min ago",
+    "description": "Relative time in the closed-tabs list",
+    "placeholders": {
+      "n": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+  "timeHoursAgo": {
+    "message": "$N$ h ago",
+    "description": "Relative time in the closed-tabs list",
+    "placeholders": {
+      "n": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "timeDaysAgo": {
+    "message": "$N$ d ago",
+    "description": "Relative time in the closed-tabs list",
+    "placeholders": {
+      "n": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "welcomeTitle": {
+    "message": "Vertical tabs are ready",
+    "description": "Welcome page title"
+  },
+  "welcomeOpen": {
+    "message": "Click the extension icon in the toolbar or press $SHORTCUT$ to open the tab bar.",
+    "description": "Welcome page: how to open the panel",
+    "placeholders": {
+      "shortcut": {
+        "content": "$1",
+        "example": "Ctrl+Shift+E"
+      }
+    }
+  },
+  "welcomeOpenNow": {
+    "message": "Open the tab bar now",
+    "description": "Welcome page button that opens the side panel straight away"
+  },
+  "welcomePin": {
+    "message": "Tip: pin the icon from the puzzle-piece menu so it is always visible.",
+    "description": "Welcome page tip"
+  },
+  "welcomeSide": {
+    "message": "Chrome decides which side the panel appears on. To use the right side, change the side panel position under Settings › Appearance.",
+    "description": "Welcome page: the side of the panel is a Chrome setting"
+  },
+  "welcomeChromeVerticalTabs": {
+    "message": "If Chrome's own vertical tab strip is turned on, turn it off so you do not end up with two tab lists.",
+    "description": "Welcome page: avoid two competing vertical tab lists"
+  },
+  "welcomePermissions": {
+    "message": "Previews need the \"Read and change all your data on all websites\" permission because Chrome only allows screenshots of the active tab with it. Previews stay on this computer and are never uploaded.",
+    "description": "Welcome page: why <all_urls> is requested"
+  },
+  "welcomeSettings": {
+    "message": "Settings live inside the tab bar (gear icon).",
+    "description": "Welcome page: where the settings are"
+  },
+  "widgetSessions": {
+    "message": "Saved sets",
+    "description": "widgetSessions (widget)"
+  },
+  "widgetSessionsSave": {
+    "message": "Save these tabs",
+    "description": "widgetSessionsSave (widget)"
+  },
+  "widgetSessionsEmpty": {
+    "message": "Nothing saved yet",
+    "description": "widgetSessionsEmpty (widget)"
+  },
+  "widgetSessionsSaved": {
+    "message": "Saved $COUNT$ tabs",
+    "description": "widgetSessionsSaved (widget)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetSessionsNothing": {
+    "message": "No page in this window can be saved",
+    "description": "widgetSessionsNothing (widget)"
+  },
+  "widgetSessionsDelete": {
+    "message": "Delete this set",
+    "description": "widgetSessionsDelete (widget)"
+  },
+  "widgetRecent": {
+    "message": "Recently used",
+    "description": "Tool heading"
+  },
+  "widgetRecentNone": {
+    "message": "No other tab has been visited yet.",
+    "description": "Empty state"
+  },
+  "widgetRecentUnsupported": {
+    "message": "This Chrome does not record when a tab was last used.",
+    "description": "Shown when lastAccessed is missing"
+  },
+  "widgetWindows": {
+    "message": "Your windows",
+    "description": "Tool heading"
+  },
+  "widgetWindowsAlone": {
+    "message": "This is your only window.",
+    "description": "Shown when one window is open"
+  },
+  "widgetWindowsUntitled": {
+    "message": "Untitled window",
+    "description": "Fallback name for a window with no readable tab"
+  },
+  "widgetWindowsHere": {
+    "message": "$COUNT$ · here",
+    "description": "Tab count for the window this panel drives",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "agoNow": {
+    "message": "now",
+    "description": "Relative time, under a minute"
+  },
+  "agoMinutes": {
+    "message": "$N$m",
+    "description": "Relative time in minutes",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "agoHours": {
+    "message": "$N$h",
+    "description": "Relative time in hours",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "agoDays": {
+    "message": "$N$d",
+    "description": "Relative time in days",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetAutoGroup": {
+    "message": "Group by site",
+    "description": "Tool heading"
+  },
+  "widgetAutoGroupRun": {
+    "message": "Group them",
+    "description": "Button that creates one tab group per site"
+  },
+  "widgetAutoGroupUndo": {
+    "message": "Undo",
+    "description": "Button that ungroups what the last run grouped"
+  },
+  "widgetAutoGroupNone": {
+    "message": "No site has two loose tabs.",
+    "description": "Shown when there is nothing to group"
+  },
+  "widgetAutoGroupFound": {
+    "message": "$SITES$ sites, $TABS$ tabs",
+    "description": "How much the tool would group",
+    "placeholders": {
+      "sites": {
+        "content": "$1"
+      },
+      "tabs": {
+        "content": "$2"
+      }
+    }
+  },
+  "widgetAutoGroupDone": {
+    "message": "Made $COUNT$ groups.",
+    "description": "Result toast",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetAutoGroupUndone": {
+    "message": "Put $COUNT$ tabs back.",
+    "description": "Undo toast",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetDuplicates": {
+    "message": "Duplicates",
+    "description": "widgetDuplicates (widget)"
+  },
+  "widgetDuplicatesNone": {
+    "message": "No page is open twice",
+    "description": "widgetDuplicatesNone (widget)"
+  },
+  "widgetDuplicatesFound": {
+    "message": "$COUNT$ extra copies",
+    "description": "widgetDuplicatesFound (widget)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetDuplicatesClose": {
+    "message": "Close the extras",
+    "description": "widgetDuplicatesClose (widget)"
+  },
+  "widgetDuplicatesClosed": {
+    "message": "Closed $COUNT$ tabs",
+    "description": "widgetDuplicatesClosed (widget)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetStale": {
+    "message": "Idle tabs",
+    "description": "widgetStale (widget)"
+  },
+  "widgetStaleNone": {
+    "message": "Nothing has gone idle",
+    "description": "widgetStaleNone (widget)"
+  },
+  "widgetStaleFound": {
+    "message": "$COUNT$ untouched for days",
+    "description": "widgetStaleFound (widget)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetStaleDiscard": {
+    "message": "Hibernate them",
+    "description": "widgetStaleDiscard (widget)"
+  },
+  "widgetStaleDiscarded": {
+    "message": "Hibernated $COUNT$ tabs",
+    "description": "widgetStaleDiscarded (widget)",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "widgetStaleUnsupported": {
+    "message": "This Chrome does not report when a tab was last used",
+    "description": "widgetStaleUnsupported (widget)"
+  },
+  "widgetScratchpad": {
+    "message": "Notes",
+    "description": "widgetScratchpad (widget)"
+  },
+  "widgetScratchpadPlaceholder": {
+    "message": "Anything you would otherwise keep a tab open for",
+    "description": "widgetScratchpadPlaceholder (widget)"
+  }
+}

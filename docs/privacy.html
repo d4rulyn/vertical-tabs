@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vertical Tabs — プライバシーポリシー</title>
+<style>
+  :root {
+    color-scheme: light;
+    --ground:  #eef1f6;
+    --surface: #ffffff;
+    --sunken:  #e4e8f0;
+    --line:    #cfd6e2;
+    --hair:    #e6eaf2;
+    --ink:     #131720;
+    --ink-2:   #46506180;
+    --ink-soft:#465061;
+    --ink-mute:#6d7789;
+    --accent:      #2b4bc4;
+    --accent-soft: #e5ebff;
+    --warn:      #9a5b00;
+    --warn-soft: #fff2dc;
+    --warn-line: #e8c48a;
+    --good:      #1d6b3f;
+    --good-soft: #e2f4e9;
+    --good-line: #a8d9bd;
+    --jp: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, system-ui, sans-serif;
+    --mono: "SFMono-Regular", Menlo, Consolas, "Noto Sans Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground:  #0f1218;
+      --surface: #171b23;
+      --sunken:  #12161d;
+      --line:    #2a313c;
+      --hair:    #222833;
+      --ink:     #e8ecf3;
+      --ink-soft:#a9b3c2;
+      --ink-mute:#7b8598;
+      --accent:      #9db4ff;
+      --accent-soft: #1a2340;
+      --warn:      #f0b969;
+      --warn-soft: #2c2416;
+      --warn-line: #4d3c1c;
+      --good:      #86d6a4;
+      --good-soft: #14261c;
+      --good-line: #27452f;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground:  #0f1218; --surface: #171b23; --sunken: #12161d;
+    --line: #2a313c; --hair: #222833;
+    --ink: #e8ecf3; --ink-soft: #a9b3c2; --ink-mute: #7b8598;
+    --accent: #9db4ff; --accent-soft: #1a2340;
+    --warn: #f0b969; --warn-soft: #2c2416; --warn-line: #4d3c1c;
+    --good: #86d6a4; --good-soft: #14261c; --good-line: #27452f;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--jp); font-size: 15px; line-height: 1.85;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: clamp(1.6rem,4vw,3.5rem) clamp(1rem,4vw,2rem) 4rem; }
+  code, kbd, .path { font-family: var(--mono); font-size: .88em; }
+  .path { background: var(--sunken); border: 1px solid var(--hair); border-radius: 3px; padding: .08em .4em; white-space: nowrap; }
+  kbd {
+    background: var(--surface); border: 1px solid var(--line);
+    border-bottom-width: 2px; border-radius: 4px; padding: .06em .4em; font-size: .85em;
+  }
+  a { color: var(--accent); }
+
+  header { margin-bottom: 2.4rem; }
+  .eyebrow { margin: 0 0 .6rem; font-size: .72rem; font-weight: 700; letter-spacing: .18em; color: var(--ink-mute); }
+  h1 { margin: 0; font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.3; letter-spacing: .01em; text-wrap: balance; }
+  .lede { margin: .9rem 0 0; color: var(--ink-soft); max-width: 34em; }
+
+  .steps { display: flex; flex-direction: column; gap: 1rem; counter-reset: step; }
+  .step {
+    counter-increment: step;
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--hair);
+    border-radius: 9px;
+    padding: 1.1rem 1.2rem 1.2rem 3.4rem;
+  }
+  .step::before {
+    content: counter(step);
+    position: absolute; left: 1rem; top: 1.15rem;
+    width: 1.6rem; height: 1.6rem;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: .82rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .step h2 { margin: 0 0 .5rem; font-size: 1.05rem; line-height: 1.55; }
+  .step p { margin: .5rem 0; color: var(--ink-soft); }
+  .step p:last-child { margin-bottom: 0; }
+  .step strong { color: var(--ink); }
+
+  pre {
+    margin: .7rem 0 0; padding: .7rem .85rem;
+    background: var(--sunken); border: 1px solid var(--hair); border-radius: 6px;
+    overflow-x: auto; font-family: var(--mono); font-size: .82rem; line-height: 1.7;
+    color: var(--ink);
+  }
+
+  .note, .warn, .good {
+    margin: .8rem 0 0; padding: .65rem .85rem;
+    border-left: 3px solid var(--line); border-radius: 0 5px 5px 0;
+    background: var(--sunken); font-size: .92rem; color: var(--ink-soft);
+  }
+  .warn { border-left-color: var(--warn-line); background: var(--warn-soft); color: var(--warn); }
+  .good { border-left-color: var(--good-line); background: var(--good-soft); color: var(--good); }
+  .warn strong, .good strong { color: inherit; }
+
+  h2.section {
+    margin: 2.8rem 0 1rem; padding-bottom: .5rem;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.15rem; letter-spacing: .02em;
+  }
+
+  details {
+    background: var(--surface); border: 1px solid var(--hair);
+    border-radius: 7px; padding: .6rem .9rem; margin-bottom: .6rem;
+  }
+  summary { cursor: pointer; font-weight: 700; font-size: .95rem; }
+  details p { margin: .6rem 0 .2rem; color: var(--ink-soft); font-size: .93rem; }
+
+  figure { margin: 1rem 0 0; }
+  figcaption { margin-top: .4rem; font-size: .8rem; color: var(--ink-mute); }
+
+  footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--hair); font-size: .84rem; color: var(--ink-mute); }
+
+  @media print {
+    body { background: #fff; color: #000; font-size: 11pt; }
+    .step, details { break-inside: avoid; border-color: #bbb; }
+    .wrap { padding: 0; max-width: none; }
+  }
+</style>
+<style>
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0 0; font-size: .93rem; }
+  th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  th { font-size: .74rem; letter-spacing: .1em; color: var(--ink-mute); border-bottom-color: var(--line); }
+  td { color: var(--ink-soft); }
+  td:first-child { color: var(--ink); }
+  ul { margin: .8rem 0 0; padding-left: 1.2rem; color: var(--ink-soft); }
+  li { margin-bottom: .5rem; }
+  ul strong, p strong { color: var(--ink); }
+  .wrap p { color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">VERTICAL TABS</p>
+  <h1>プライバシーポリシー</h1>
+  <p class="lede">
+    この拡張機能は、<strong>いかなるデータも収集・送信しません</strong>。
+    サーバーもアカウントもアナリティクスもなく、ネットワーク通信を一切行いません。
+    以下はその内訳です。
+  </p>
+</header>
+
+<h2 class="section">収集する情報</h2>
+
+<div class="good"><strong>ありません。</strong>
+  個人情報、閲覧履歴、入力内容、識別子のいずれも収集しません。
+  開発者を含め、誰かがあなたの情報を受け取ることはありません。</div>
+
+<h2 class="section">端末内に保存されるもの</h2>
+
+<p>拡張機能が動作するために、以下を<strong>お使いのブラウザ内にのみ</strong>保存します。
+  これらが端末の外に出ることはなく、拡張機能を削除すれば一緒に消えます。</p>
+
+<table>
+  <thead><tr><th>保存されるもの</th><th>保存先</th><th>目的</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>開いているタブのプレビュー画像</td>
+      <td>IndexedDB（端末内）</td>
+      <td>タブ一覧に表示するため。縮小した画像で、元のページの内容は保持しません</td>
+    </tr>
+    <tr>
+      <td>設定（テーマ、列数、プレビューの挙動など）</td>
+      <td>chrome.storage.local（端末内）</td>
+      <td>次回起動時に同じ状態で開くため</td>
+    </tr>
+    <tr>
+      <td>保存したタブのセット、メモ</td>
+      <td>chrome.storage.local（端末内）</td>
+      <td>ユーザーが明示的に保存したものを保持するため</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">プレビューは設定画面の「プレビューのキャッシュを削除」でいつでも消せます。
+  シークレット ウィンドウのタブは<strong>一切撮影も保存もしません</strong>。
+  設定で指定したサイトも対象外にできます。</div>
+
+<h2 class="section">権限について</h2>
+
+<p>Chrome のインストール画面には「すべてのウェブサイトのデータの読み取りと変更」と表示されます。
+  強い表現ですが、この拡張機能が実際に行うのは次の 2 つだけです。</p>
+
+<ul>
+  <li><strong>表示中のページの画像を Chrome に要求する</strong>（<span class="path">captureVisibleTab</span>）。
+    プレビューそのものです。Chrome はこの操作に対象ページへのアクセス権を要求するため、
+    どのサイトでもプレビューを出すには全サイトへの権限が必要になります。</li>
+  <li><strong>ページのスクロール位置（<span class="path">window.scrollY</span>）を読む</strong>。
+    プレビューをページ先頭に保つ設定のために、数値をひとつ読むだけです。</li>
+</ul>
+
+<p>ページの内容を読み取ること、書き換えること、コンテンツスクリプトを挿入することはありません。
+  読み取った画像と数値はいずれも端末内で完結します。</p>
+
+<h2 class="section">第三者への提供</h2>
+
+<p>ありません。外部サービスとの連携、広告、解析ツール、クラッシュレポートのいずれも
+  組み込んでいません。拡張機能が通信を行わないことは自動テストで検証しており、
+  通信を伴う機能を追加すればテストが失敗します。</p>
+
+<h2 class="section">変更があった場合</h2>
+
+<p>この方針を変更する場合は、変更後のバージョンを公開する前にこのページを更新します。
+  データの収集や送信を始めることになった場合は、更新履歴にその旨を明記します。</p>
+
+<footer>
+  最終更新: 2026-09-14<br>
+  この文書の実体はリポジトリの <span class="path">docs/privacy.html</span> です。
+</footer>
+
+</div>
+</body>
+</html>
