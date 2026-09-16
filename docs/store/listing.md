@@ -174,8 +174,15 @@ HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose -f tests/docker-compose.yml r
 ## Fields that are a decision, not copy
 
 - **Publisher display name** — the name buyers see. Set in Account settings.
-- **Privacy policy URL** — required, because the extension requests host permissions. The
-  text is `docs/privacy.html`; it needs to be reachable at a public URL (GitHub Pages on
-  the repository serves it once the repository is public).
+- **Privacy policy URL** — required, because the extension requests host permissions.
+  Paste this, it is live:
+
+  ```
+  https://d4rulyn.github.io/vertical-tabs/privacy.html
+  ```
+
+  It is `docs/privacy.html` served by GitHub Pages from `main`. Editing that file and
+  pushing updates the URL; nothing else has to be re-submitted for a policy wording
+  change.
 - **Support/contact email** — the dashboard requires a verified address. It is shown on
   the listing, so use one intended to be public.

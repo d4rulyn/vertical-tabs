@@ -82,7 +82,7 @@ Chrome のサイドパネルに **縦型のタブ一覧をページプレビュ�
 
 ## インストール
 
-> **別のマシンに入れるなら** → **[docs/install.html](docs/install.html)**（ブラウザで開く手順書）。
+> **別のマシンに入れるなら** → **[導入手順](https://d4rulyn.github.io/vertical-tabs/install.html)**（ブラウザで開けます）。
 > 最新の zip は [Releases](../../releases/latest) にあります:
 > ```
 > gh release download v1.0.0 --repo d4rulyn/vertical-tabs --pattern '*.zip'

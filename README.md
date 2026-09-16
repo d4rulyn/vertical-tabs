@@ -94,7 +94,7 @@ with **Load unpacked**.
 > ```
 > gh release download v1.0.0 --repo d4rulyn/vertical-tabs --pattern '*.zip'
 > ```
-> The walkthrough is **[docs/install.html](docs/install.html)**, a
+> The walkthrough is **[the install guide](https://d4rulyn.github.io/vertical-tabs/install.html)**, a
 > single page you open in a browser: building the zip, loading it, the permission the
 > previews cannot work without, updating, and what to do when something looks wrong.
 >
