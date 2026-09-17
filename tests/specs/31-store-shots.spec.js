@@ -15,6 +15,33 @@ const { test, expect } = require('../fixtures');
 const { swEval, createTab, keyOf, waitForThumb, setSettings } = require('../helpers/chrome');
 
 const OUT = '/work/docs/store/screenshots';
+
+// The store shows one listing per language, and a screenshot carries its own words, so
+// a Japanese caption on the English listing is the same mistake as an untranslated
+// button. Each shot is rendered once per language.
+const COPY = {
+  en: {
+    list:    ['Your tabs, vertical, each showing the page itself',
+              'Recognisable by the page rather than by a favicon you have seen forty times. Groups and pinned tabs are drawn as they are.'],
+    tools:   ['The width Chrome insists on, spent on tidying tabs',
+              'Recently used, your other windows, duplicates, idle tabs, notes. Pick the ones you want; unpick them all and the column goes away.'],
+    columns: ['One to five columns, any card size, either theme',
+              'Light and dark, English and Japanese, and a card size that packs the row instead of leaving a gutter.'],
+    search:  ['Search reaches into your other windows',
+              'Every window, not just this one. Choosing a result brings that window forward and opens the tab.'],
+  },
+  ja: {
+    list:    ['タブを縦に並べて、それぞれにページの見た目を添える',
+              'ファビコンではなくページそのもので見分けられます。グループとピン留めタブもそのまま表示されます。'],
+    tools:   ['余った幅は、タブの片づけに使う',
+              '最近使ったタブ、開いているウィンドウ、重複の検出、放置タブの休止、メモ。必要なものだけ選べます。'],
+    columns: ['列数もカードの大きさも、テーマも選べる',
+              '1 列から 5 列まで。ライトとダーク、日本語と英語に対応しています。'],
+    search:  ['他のウィンドウにあるタブも探せる',
+              '検索は開いているすべてのウィンドウに届きます。選べばそのウィンドウを前に出して開きます。'],
+  },
+};
+const LANGS = Object.keys(COPY);
 // The panel is captured at exactly the height the mock window gives it. Capturing
 // taller and letting the composition crop is how the first attempt cut the
 // cross-window results — the one thing that screenshot existed to show — off the bottom.
@@ -69,9 +96,17 @@ async function compose(context, { png, page: pagePng, title, caption, dark, file
   const sheet = await context.newPage();
   await sheet.setViewportSize({ width: 1280, height: 800 });
   await sheet.setContent(html);
-  fs.mkdirSync(OUT, { recursive: true });
+  fs.mkdirSync(path.dirname(path.join(OUT, file)), { recursive: true });
   await sheet.screenshot({ path: path.join(OUT, file) });
   await sheet.close();
+}
+
+/** The same frame, once per language, so each listing gets words its readers can read. */
+async function composeAll(context, { png, page, key, dark, file }) {
+  for (const lang of LANGS) {
+    const [title, caption] = COPY[lang][key];
+    await compose(context, { png, page, title, caption, dark, file: `${lang}/${file}` });
+  }
 }
 
 test('produces the 1280x800 store screenshots', async ({ harness, serviceWorker, fixtures, context }) => {
@@ -162,12 +197,10 @@ test('produces the 1280x800 store screenshots', async ({ harness, serviceWorker,
   await clearBanners();
 
   // 1 — the product, dark.
-  await compose(context, {
+  await composeAll(context, {
     page: pageShot,
     png: await panel.screenshot(),
-    title: 'タブを縦に並べて、それぞれにページの見た目を添える',
-    caption: 'ファビコンではなくページそのもので見分けられます。グループとピン留めタブもそのまま表示されます。',
-    dark: true, file: '01-list-dark.png',
+    key: 'list', dark: true, file: '01-list-dark.png',
   });
 
   // 2 — the tools column, which is what fills Chrome's 360 px floor.
@@ -179,12 +212,10 @@ test('produces the 1280x800 store screenshots', async ({ harness, serviceWorker,
     { timeout: 15_000 },
   ).toBeGreaterThan(3);
   await clearBanners();
-  await compose(context, {
+  await composeAll(context, {
     page: pageShot,
     png: await panel.screenshot(),
-    title: '余った幅は、タブの片づけに使う',
-    caption: '最近使ったタブ、開いているウィンドウ、重複の検出、放置タブの休止、メモ。必要なものだけ選べます。',
-    dark: true, file: '02-tools-dark.png',
+    key: 'tools', dark: true, file: '02-tools-dark.png',
   });
 
   // 3 — light theme, two columns: the same panel, configured differently.
@@ -194,12 +225,10 @@ test('produces the 1280x800 store screenshots', async ({ harness, serviceWorker,
     { timeout: 15_000 },
   ).toBe('2');
   await clearBanners();
-  await compose(context, {
+  await composeAll(context, {
     page: pageShot,
     png: await panel.screenshot(),
-    title: '列数もカードの大きさも、テーマも選べる',
-    caption: '1 列から 5 列まで。ライトとダーク、日本語と英語に対応しています。',
-    dark: false, file: '03-columns-light.png',
+    key: 'columns', dark: false, file: '03-columns-light.png',
   });
 
   // 4 — search reaching into another window, the thing a tab list normally cannot do.
@@ -216,15 +245,15 @@ test('produces the 1280x800 store screenshots', async ({ harness, serviceWorker,
   await panel.locator('#search-input').fill('release');
   await expect(panel.locator('#other-windows')).toBeVisible({ timeout: 15_000 });
   await clearBanners();
-  await compose(context, {
+  await composeAll(context, {
     page: pageShot,
     png: await panel.screenshot(),
-    title: '他のウィンドウにあるタブも探せる',
-    caption: '検索は開いているすべてのウィンドウに届きます。選べばそのウィンドウを前に出して開きます。',
-    dark: true, file: '04-search.png',
+    key: 'search', dark: true, file: '04-search.png',
   });
 
-  const made = fs.readdirSync(OUT).filter((f) => f.endsWith('.png')).sort();
-  console.log('[store] wrote', made.join(', '));
-  expect(made.length).toBe(4);
+  for (const lang of LANGS) {
+    const made = fs.readdirSync(path.join(OUT, lang)).filter((f) => f.endsWith('.png')).sort();
+    console.log(`[store] ${lang}: ${made.join(', ')}`);
+    expect(made.length, `${lang} is missing a screenshot`).toBe(4);
+  }
 });

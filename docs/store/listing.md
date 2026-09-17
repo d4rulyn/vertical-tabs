@@ -160,7 +160,7 @@ Chrome 120 以降が必要です。サイドパネルの左右と最小幅は Ch
 | Asset | Size | Status |
 | --- | --- | --- |
 | Store icon | 128×128 PNG | `extension/icons/icon128.png` — ready |
-| Screenshot (1–5) | **1280×800** or 640×400 PNG | `docs/store/screenshots/` — generated, see below |
+| Screenshot (1–5) | **1280×800** or 640×400 PNG | `docs/store/screenshots/en/` and `/ja/` — four each. A screenshot carries its own words, so upload them per language under *Localized assets*, not under *assets for all languages* |
 | Small promo tile | 440×280 PNG | optional; only needed to be featured |
 | Marquee promo tile | 1400×560 PNG | optional |
 
