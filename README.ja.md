@@ -82,6 +82,10 @@ Chrome のサイドパネルに **縦型のタブ一覧をページプレビュ�
 
 ## インストール
 
+**[Chrome ウェブストアからインストール](https://chromewebstore.google.com/detail/vertical-tabs/ofajdfikeepefnogjblgcecnmopanaak)** — これが一番簡単です。
+
+手動で入れる場合や、開発版を試す場合は以下。
+
 > **別のマシンに入れるなら** → **[導入手順](https://d4rulyn.github.io/vertical-tabs/install.html)**（ブラウザで開けます）。
 > 最新の zip は [Releases](../../releases/latest) にあります:
 > ```

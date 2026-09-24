@@ -90,6 +90,10 @@ with **Load unpacked**.
 
 ## Install
 
+**[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/vertical-tabs/ofajdfikeepefnogjblgcecnmopanaak)** — the short way.
+
+To load it by hand, or to run a development build:
+
 > **Setting this up on another machine?** → the zip is on [Releases](../../releases/latest):
 > ```
 > gh release download v1.0.0 --repo d4rulyn/vertical-tabs --pattern '*.zip'
