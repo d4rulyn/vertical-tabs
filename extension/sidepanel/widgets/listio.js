@@ -21,6 +21,7 @@ const t = (key, subs) => i18n.t(key, subs);
 export const listIO = {
   id: 'listIO',
   titleKey: 'widgetListIO',
+  iconId: 'i-list',
   mount(body, ctx) {
     const copy = document.createElement('button');
     copy.type = 'button';

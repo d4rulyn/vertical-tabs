@@ -14,10 +14,14 @@ const { setupTwoWindows } = require('./helpers/windows');
 
 const EXT = process.env.EXT_DIR || path.resolve(__dirname, '../extension');
 
-function launchArgs({ headed = false } = {}) {
+// `extDir` defaults to EXT — i.e. to `process.env.EXT_DIR`, then to extension/. A spec
+// passes it when it needs a DIFFERENT build in one test without changing what every
+// other spec in the worker loads: `process.env.EXT_DIR` is read once, at require time,
+// so a spec that reassigned it would silently relaunch its neighbours against the copy.
+function launchArgs({ headed = false, extDir = EXT } = {}) {
   const args = [
-    `--disable-extensions-except=${EXT}`,
-    `--load-extension=${EXT}`,
+    `--disable-extensions-except=${extDir}`,
+    `--load-extension=${extDir}`,
   ];
   // Chromium's own sandbox is redundant inside the container and unavailable to the
   // non-root user compose runs as; Playwright adds the same flag itself when the
@@ -33,13 +37,15 @@ function launchArgs({ headed = false } = {}) {
  * browser (e.g. the Japanese UI language run).
  */
 async function launchExtensionContext(options = {}) {
-  const { headed = false, env, locale = 'en-US', colorScheme = 'dark', viewport } = options;
+  const {
+    headed = false, env, locale = 'en-US', colorScheme = 'dark', viewport, extDir = EXT,
+  } = options;
   const launchOptions = {
     channel: 'chromium',
     headless: !headed,
     colorScheme,
     viewport: viewport || { width: 1280, height: 800 },
-    args: launchArgs({ headed }),
+    args: launchArgs({ headed, extDir }),
   };
   if (locale) launchOptions.locale = locale;
   if (env) launchOptions.env = env;

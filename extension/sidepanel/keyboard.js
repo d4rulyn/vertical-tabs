@@ -18,6 +18,7 @@ import * as settingsView from './settings-view.js';
 import * as trash from './trash.js';
 import * as palette from './palette.js';
 import * as toastMod from './toast.js';
+import * as toolStrip from './tool-strip.js';
 
 const NONE = ops.TAB_GROUP_ID_NONE;
 
@@ -264,9 +265,10 @@ function onKeyDown(event) {
     return;
   }
 
-  // Menus, the drawer, the palette and the popover handle their own keys.
+  // Menus, the drawer, the palette, the popover and the tool sheet handle their own keys.
   if (palette.isOpen()) return;
   if (contextMenu.isOpen() || settingsView.isOpen() || trash.isOpen() || toastMod.isConfirmOpen()) return;
+  if (toolStrip.isOpen()) return;
 
   const target = event.target instanceof Element ? event.target : null;
   const inEditable = isEditable(target);
@@ -331,6 +333,16 @@ function onEscape(event) {
   if (trash.isOpen()) {
     event.preventDefault();
     trash.close();
+    return;
+  }
+  // The tool sheet stops its own Escape when focus is inside it. It is not always: a tool
+  // with no focusable content at all (Now playing is two `<div>`s) leaves focus on the
+  // strip button that opened it, which is OUTSIDE `#tool-sheet`, so the sheet's own
+  // handler never runs and the fall-through below would merely blur the button and leave
+  // the sheet open.
+  if (toolStrip.isOpen()) {
+    event.preventDefault();
+    toolStrip.closeSheet();
     return;
   }
   if (settingsView.isOpen()) {

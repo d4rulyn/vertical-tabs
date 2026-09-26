@@ -24,6 +24,7 @@ const STALE_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 export const duplicates = {
   id: 'duplicates',
   titleKey: 'widgetDuplicates',
+  iconId: 'i-copies',
   mount(body, ctx) {
     const summary = document.createElement('div');
     summary.className = 'w-muted';
@@ -101,6 +102,7 @@ export const duplicates = {
 export const staleTabs = {
   id: 'staleTabs',
   titleKey: 'widgetStale',
+  iconId: 'i-hourglass',
   mount(body, ctx) {
     const summary = document.createElement('div');
     summary.className = 'w-muted';

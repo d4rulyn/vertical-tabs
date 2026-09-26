@@ -32,6 +32,9 @@ export const DEFAULTS = Object.freeze({
   // than a conventional vertical tab strip. Each tool is switchable, and clearing
   // the list hides the column entirely.
   widgets: ['sessions', 'recent', 'windows', 'autoGroup', 'duplicates', 'staleTabs', 'scratchpad'],
+  // Which of the two things the column beside the tabs is showing. `tools` is what
+  // every install has had so far, so an update changes nothing until the user asks.
+  railMode: 'tools',
   showThumbnails: true,
   previewMoment: 'top',
   refreshInterval: '1m',
@@ -193,6 +196,25 @@ export function normalizeWidgets(value) {
     out.push(id);
   }
   return out;
+}
+
+/**
+ * What the column beside the tab list is for.
+ *
+ *  - `tools`     the widgets the user ticked, i.e. `widgets`. The default, because it
+ *                is what every existing install already shows.
+ *  - `bookmarks` the bookmark rail instead. The tool rail is hidden by being handed a
+ *                DERIVED empty list; `widgets` itself is never rewritten, so flipping
+ *                back restores the user's own set of tools exactly.
+ */
+export const RAIL_MODES = Object.freeze(['tools', 'bookmarks']);
+
+/**
+ * @param {unknown} value
+ * @returns {string} one of `RAIL_MODES`; anything else becomes the default
+ */
+export function normalizeRailMode(value) {
+  return enumOr(value, RAIL_MODES, DEFAULTS.railMode);
 }
 
 /** Keys whose value is a plain boolean. */
@@ -364,6 +386,7 @@ export function normalizeSettings(raw) {
   out.columns = migrateColumns(src);
   out.cardWidth = normalizeCardWidth(src.cardWidth);
   out.widgets = normalizeWidgets(src.widgets);
+  out.railMode = normalizeRailMode(src.railMode);
   out.refreshInterval = enumOr(src.refreshInterval, REFRESH_INTERVALS, DEFAULTS.refreshInterval);
   out.previewMoment = normalizePreviewMoment(src.previewMoment);
 

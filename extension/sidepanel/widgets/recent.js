@@ -27,6 +27,7 @@ const MAX_ROWS = 8;
 export const recentTabs = {
   id: 'recent',
   titleKey: 'widgetRecent',
+  iconId: 'i-clock',
   mount(body, ctx) {
     const list = document.createElement('div');
     list.className = 'w-rows';

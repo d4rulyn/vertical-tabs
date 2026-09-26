@@ -253,7 +253,7 @@ async function boot() {
     setMuted: (tabId, muted) => void ops.update(tabId, { muted }),
     toast: (text) => showToast(text),
   });
-  widgets.apply(settings.widgets);
+  widgets.apply(railWidgets(settings));
   thumbs.init(thumbsContext());
   state.setRenderer(render.render);
   await state.init(windowId, settings);
@@ -290,6 +290,7 @@ async function boot() {
   publishTestHooks();
 
   await loadFeatureModules();
+  await ensureBookmarks(state.state.settings);
   render.render();
   if (window.__vt) window.__vt.modulesReady = true;
 }
@@ -310,6 +311,69 @@ async function panelReady() {
     if (attempt === 0) await sleep(300); // the service worker may still be starting
   }
   return null;
+}
+
+/**
+ * The tools the rail should be showing — none of them while the side column belongs
+ * to the bookmarks.
+ *
+ * A DERIVED list, computed at the two call sites and nowhere stored: `settings.widgets`
+ * stays exactly as the user ticked it, so switching back to `tools` brings their own
+ * set back rather than an empty column. Handing `apply([])` is also the path ten spec
+ * files already exercise, so hiding the rail this way is the behaviour that is already
+ * under test.
+ *
+ * @param {any} settings
+ * @returns {string[]}
+ */
+function railWidgets(settings) {
+  if (!settings) return [];
+  return settings.railMode === 'bookmarks' ? [] : (settings.widgets || []);
+}
+
+/** The bookmark column's module, imported at most once. @type {Promise<any>|null} */
+let bookmarksImport = null;
+/** Set before `init()` is awaited, so two settings changes cannot start it twice. */
+let bookmarksStarted = false;
+/** `pagehide` has run. Nothing may be started on the document after that. */
+let panelClosing = false;
+
+/**
+ * Load the bookmark column — and only for a profile that has actually asked for it.
+ *
+ * Deliberately NOT in `loadFeatureModules()`'s fixed list. Everything in that list is
+ * imported during boot on every install, and `tests/specs/29-open-latency.spec.js`
+ * measures what boot costs; a file nobody in `tools` mode will ever see has no business
+ * in that budget. The cost of the feature for someone who never turns it on is the
+ * `railMode` comparison below.
+ *
+ * `bookmarks.js` subscribes to `settings` itself for its own build and teardown, so it
+ * is started once and then left alone.
+ *
+ * @param {any} settings
+ * @returns {Promise<void>}
+ */
+async function ensureBookmarks(settings) {
+  if (!settings || settings.railMode !== 'bookmarks' || panelClosing) return;
+  if (!bookmarksImport) {
+    bookmarksImport = import('./bookmarks.js').catch((e) => {
+      log.warn('optional module ./bookmarks.js not loaded', e);
+      return null;
+    });
+  }
+  const mod = await bookmarksImport;
+  // `pagehide` can land inside that import. `onPageHide()` would have found
+  // `modules.bookmarks` still undefined and called no `destroy()` at all, so starting the
+  // column now would register five Chrome listeners on a document that has already
+  // broadcast `PANEL_CLOSING`.
+  if (!mod || bookmarksStarted || panelClosing) return;
+  bookmarksStarted = true;
+  modules.bookmarks = mod;
+  try {
+    if (typeof mod.init === 'function') await mod.init(panelContext());
+  } catch (e) {
+    log.error('init ./bookmarks.js', e);
+  }
 }
 
 /** Context handed to `thumbs.js` (spec-addendum A9). */
@@ -349,6 +413,7 @@ async function loadFeatureModules() {
     ['trash', './trash.js'],
     ['settingsView', './settings-view.js'],
     ['palette', './palette.js'],
+    ['toolStrip', './tool-strip.js'],
   ];
   const ctx = panelContext();
   for (const [name, path] of wanted) {
@@ -433,6 +498,9 @@ function panelContext() {
       return ops;
     },
     getSettings: () => state.state.settings,
+    // The live tab model, under the name `widgets.js` already hands its tools. The
+    // bookmark column keys its rows against it to find the pages you already have open.
+    model: () => state.state,
     render: () => render.render(),
     renderModule: render,
     rerenderTab: (tabId) => render.rerenderTab(tabId),
@@ -566,7 +634,10 @@ function registerUi() {
 function registerStateSubscriptions() {
   state.subscribe('settings', (settings) => {
     render.applySettingsAttrs(settings);
-    widgets.apply(settings.widgets);
+    widgets.apply(railWidgets(settings));
+    // First time into `bookmarks` mode this is where the column is imported; every time
+    // after, it is a comparison and a resolved promise nobody waits on.
+    void ensureBookmarks(settings);
   });
   state.subscribe('policy', (until) => {
     if (modules.hints) return; // hints.js listens for vt/policy-changed itself
@@ -1107,7 +1178,17 @@ function watchSystemTheme() {
 }
 
 function onPageHide() {
+  panelClosing = true;
   widgets.destroy();
+  // The bookmark column owns Chrome listeners and two timers of its own; a `pagehide`
+  // that left them registered would leave them pointing at a dead document.
+  if (modules.bookmarks && typeof modules.bookmarks.destroy === 'function') {
+    try {
+      modules.bookmarks.destroy();
+    } catch (e) {
+      log.warn('bookmarks destroy', e);
+    }
+  }
   void broadcast({ type: MSG.PANEL_CLOSING, windowId });
   thumbs.dispose();
 }

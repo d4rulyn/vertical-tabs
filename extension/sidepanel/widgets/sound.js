@@ -16,6 +16,7 @@ const t = (key, subs) => i18n.t(key, subs);
 export const nowPlaying = {
   id: 'nowPlaying',
   titleKey: 'widgetNowPlaying',
+  iconId: 'i-audio',
   mount(body, ctx) {
     const empty = document.createElement('div');
     empty.className = 'w-np__empty';

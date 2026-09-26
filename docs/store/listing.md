@@ -14,8 +14,21 @@ The store shows one listing per language. Set **English** as the default and add
 The dashboard requires one sentence, and a listing whose permissions do not follow from
 it is rejected. This is the sentence everything else has to be consistent with:
 
-> Show the browser's open tabs as a vertical list in the side panel, each with a preview
-> image of the page, and let the user manage those tabs from it.
+> Show, in the side panel, the lists a user opens a page from — the browser's open tabs as
+> a vertical list with a preview image of each page and the controls to manage them, and,
+> in the column beside it, the user's saved bookmarks when they choose that layout, as a
+> list to browse, to open from, and to add the current tab to.
+
+参考訳（ダッシュボードに入れるのは上の英文ひとつ）:
+
+> ブラウザで開いているタブを、ページのプレビュー画像と操作を添えた縦一列のリストとして
+> サイドパネルに表示し、その横の列には、ユーザーがそのレイアウトを選んだときだけ、保存した
+> ブックマークを、たどって開いたり現在のタブを追加したりできる一覧として表示する —
+> 次に開くページを選ぶための場所です。
+
+It was widened for the bookmarks update; the old wording named only the tab list.
+`permissions.md` justifies each permission against this sentence, and
+`resubmission-note.md` records what the change means for the review.
 
 ---
 
@@ -27,10 +40,10 @@ it is rejected. This is the sentence everything else has to be consistent with:
 Vertical Tabs
 ```
 
-**Short description** (132 char limit — this one is 125)
+**Short description** (132 char limit — this one is 129)
 
 ```
-A vertical tab list in Chrome's side panel, with a preview image of every page. Find, group and tidy tabs without leaving it.
+A vertical tab list in Chrome's side panel, with a preview image of every page. Find and tidy tabs, or browse bookmarks, from it.
 ```
 
 **Category**: Workflow & Planning
@@ -71,18 +84,34 @@ MANAGING TABS, NOT JUST LISTING THEM
 • Detach the list into a window of its own when you want it narrower than Chrome's side
   panel allows.
 
+BOOKMARKS IN THAT COLUMN INSTEAD, IF YOU WANT THEM
+
+The column beside the tab list holds those tools by default. Switch it to bookmarks and it
+becomes your own folders, one level at a time: click a row to open it, see a dot on
+anything already open in a tab, and press one button to bookmark the tab you are on.
+Chrome asks for the bookmarks permission at that moment rather than at install, and you
+can refuse it or take it back later. The extension reads your bookmarks to draw the list
+and does nothing else with them — no renaming, no deleting, no reordering. Switch back and
+your tools return exactly as you had them.
+
 IT DOES NOT TALK TO ANYTHING
 
 No servers, no analytics, no accounts, no network requests of any kind. Previews are
-stored on your own machine and never leave it. An automated test asserts that every part
-of the extension makes zero network requests, so this stays true rather than quietly
-rotting.
+stored on your own machine and never leave it. Bookmarks are no different: they are read
+out of Chrome, drawn on the screen, and never copied anywhere. An automated test asserts
+that every part of the extension makes zero network requests, so this stays true rather
+than quietly rotting.
 
 WHAT IT NEEDS, AND WHY
 
 Taking a picture of a page requires Chrome's permission to access that page — there is no
 narrower way to do it. After installing, open chrome://extensions, click Details, and set
 Site access to "On all sites", or no previews can be produced at all.
+
+The bookmarks column is the only part that asks for anything beyond that, and it asks the
+first time you switch to it, not at install. Say no and everything else works unchanged;
+say yes and you can still take it back from chrome://extensions, which puts the column
+back to asking.
 
 Requires Chrome 120 or later. The side panel's position (left or right) and its minimum
 width are Chrome's settings, not the extension's.
@@ -98,10 +127,10 @@ width are Chrome's settings, not the extension's.
 縦型タブ
 ```
 
-**簡単な説明**（132 文字以内）
+**簡単な説明**（132 文字以内 — この文は 70 文字）
 
 ```
-Chrome のサイドパネルにタブを縦一列で表示し、それぞれにページのプレビューを添えます。検索・グループ化・整理もここで完結します。
+Chrome のサイドパネルにタブを縦一列で表示し、それぞれにページのプレビューを添えます。横の列はツールとブックマークを切り替えられます。
 ```
 
 **カテゴリ**: ワークフローと計画
@@ -137,17 +166,30 @@ Chrome はタブを横に並べ続け、やがてタイトルが読めなくな�
 ・列数 1〜5、カード幅の調整、ライト／ダークテーマ、日本語と英語。
 ・Chrome のサイドパネルより細くしたいときは、別ウィンドウに切り離せます。
 
+同じ列にブックマークも出せます（切り替え式）
+
+タブ一覧の横にある列は、既定ではいま挙げたツールが並びます。ここをブックマークに切り替えると、
+自分のフォルダを一段ずつたどって開ける一覧になります。クリックで開き、すでに開いているページには
+印が付き、「このタブを追加」ボタンひとつで今見ているページを保存できます。ブックマークの権限を
+Chrome が尋ねるのは切り替えたそのときで、インストール時ではありません。断ることも、後から
+取り消すこともできます。拡張が行うのは一覧を描くための読み取りだけで、名前の変更・削除・
+並べ替えはしません。ツールに戻せば、選んでいたツールがそのまま復活します。
+
 どこにも通信しません
 
 サーバーもアナリティクスもアカウントもなく、ネットワーク通信を一切行いません。プレビューは
-お使いの端末内にのみ保存され、外に出ることはありません。全機能を表示した状態で通信が
-ゼロであることを自動テストで検証しているので、この約束は黙って形骸化しません。
+お使いの端末内にのみ保存され、外に出ることはありません。ブックマークも同じで、Chrome から
+読んで画面に描くだけです。どこにも送りませんし、コピーも残しません。全機能を表示した状態で
+通信がゼロであることを自動テストで検証しているので、この約束は黙って形骸化しません。
 
 必要な権限について
 
 ページを撮影するには、そのページへのアクセス権が必要です。これより狭い方法はありません。
 インストール後に chrome://extensions → 詳細 → 「サイトへのアクセス」を「すべてのサイト」に
 してください。ここを設定しないとプレビューは 1 枚も作成されません。
+
+これ以外に権限を求めるのはブックマーク列だけで、初めて切り替えたときに尋ねます。断っても
+他の機能はそのまま使えますし、許可した後でも chrome://extensions から取り消せます。
 
 Chrome 120 以降が必要です。サイドパネルの左右と最小幅は Chrome 側の設定で、拡張からは
 変更できません。

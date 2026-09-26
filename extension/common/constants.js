@@ -295,6 +295,14 @@ export const STORAGE_SESSION = {
   unreadTabs: 'unreadTabs',
   /** Tab ids the user has locked; see sidepanel/locks.js for why ids and why session. */
   lockedTabs: 'lockedTabs',
+  /**
+   * Where the bookmark column was left: `{ folderId, scrollTop }` (sidepanel/bookmarks.js).
+   *
+   * Session rather than local on purpose. Closing and reopening the panel should put the
+   * reader back in the folder they were reading, and a browser restart should not — the
+   * folder you were three levels into yesterday is not where you want to start today.
+   */
+  bookmarkView: 'bookmarkView',
   diagnostics: 'diagnostics',
   hostAccessState: 'hostAccessState',
   noHostAccessOrigins: 'noHostAccessOrigins',

@@ -288,3 +288,36 @@ test('the settings drawer opens and the preview cache can be cleared',
     await expect(panel.locator(`[data-tab-id="${tabIds.alpha}"] .thumb`))
       .not.toHaveClass(/thumb--loaded/, { timeout: 15_000 });
   });
+
+/* Every label in the drawer comes from `t(key)`, and `t()` returns the bare key when the
+ * locale does not define it (common/i18n.js). Three of the drawer's keys are not written
+ * out but derived from data — the widget ids, the column choices and the card widths — and
+ * a template literal is invisible to both static scans, so `widgetStaleTabs` shipped
+ * undefined and its checkbox read "widgetStaleTabs" in the released extension. The unit
+ * tests now compare the derived keys against _locales; this is the same claim checked
+ * where it matters, on the drawer Chromium actually rendered. */
+test('no control in the settings drawer is labelled with a raw i18n key', async ({ harness }) => {
+  const { panel } = harness;
+
+  await panel.locator('[data-testid="settings-button"]').click();
+  await expect(panel.locator('[data-testid="settings-view"]')).toBeVisible({ timeout: 10_000 });
+
+  const view = panel.locator('[data-testid="settings-view"]');
+  await expect(view.locator('.drawer__row--widget')).toHaveCount(9);
+
+  const texts = await view
+    .locator('.drawer__section-title, .drawer__label, .drawer__help, option')
+    .evaluateAll((els) => els.map((el) => ({
+      text: (el.textContent || '').trim(),
+      where: el.className || el.tagName.toLowerCase(),
+    })));
+  expect(texts.length).toBeGreaterThan(30);
+
+  // A rendered label always has a space, a capital, a digit or a non-ASCII character in it.
+  // A leaked key never does: every key in _locales is lowerCamelCase and unbroken.
+  for (const { text, where } of texts) {
+    expect(text, `"${text}" (${where}) is a raw i18n key, not a localised label`)
+      .not.toMatch(/^[a-z][A-Za-z0-9]{2,}$/);
+    expect(text.length, `an empty label in ${where}`).toBeGreaterThan(0);
+  }
+});

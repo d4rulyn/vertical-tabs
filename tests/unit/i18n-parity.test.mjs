@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { EXT, walk, readJson } from './_load.mjs';
+import { EXT, walk, readJson, loadCommon } from './_load.mjs';
 
 const EN_FILE = path.join(EXT, '_locales', 'en', 'messages.json');
 const JA_FILE = path.join(EXT, '_locales', 'ja', 'messages.json');
@@ -55,6 +55,13 @@ const EXACT_EN = {
   searchPlaceholder: 'Search tabs',
   closedTabs: 'Closed tabs',
   searchCount: '$N$ of $M$ tabs',
+  // 32-bookmarks-rail asserts these four verbatim. Pinned here so that renaming one
+  // fails in seconds against the string table instead of six minutes later as an opaque
+  // Playwright text mismatch.
+  widgetScratchpad: 'Notes',
+  bookmarksGrantTitle: 'Bookmarks need your permission first',
+  bookmarksGrantButton: 'Allow bookmarks',
+  bookmarksMore: '$COUNT$ more',
 };
 const EXACT_JA = {
   extName: '縦型タブ',
@@ -176,4 +183,108 @@ test('every i18n key referenced from extension/** is defined', () => {
     .filter(([key]) => !(key in en))
     .map(([key, file]) => `${key} (referenced in ${file})`);
   assert.deepEqual(undefinedKeys, [], 'i18n keys referenced by the extension but missing from _locales/en');
+});
+
+// settings-view.js does not spell three of its i18n keys out. It derives them from data:
+//
+//   options: COLUMN_CHOICES.map((n) => [String(n), `columns${n}`])
+//   px === CARD_WIDTH_FILL ? 'cardWidthFill' : `cardWidth${px}`
+//   labelKey: `widget${id.charAt(0).toUpperCase()}${id.slice(1)}`
+//
+// A template literal is invisible to the reference scan above and to MSG_RE in
+// tools/check_integration.py, so adding a choice can ship a row labelled with its own key.
+// widgetStaleTabs shipped exactly that way: the staleTabs widget is titled widgetStale, so
+// the key the drawer derived was defined nowhere and the checkbox read "widgetStaleTabs".
+// t() does console.warn on a miss (common/i18n.js), but no test asserts on the console and
+// the __MSG_ guards in 01-load, 09-i18n and 14-coverage cannot fire — t() returns the bare
+// key, not __MSG_key__ — so nothing failed. These three tests are the check the derivations
+// do not otherwise get.
+test('every option the settings drawer derives has a message in both locales', async () => {
+  const { WIDGET_IDS, COLUMN_CHOICES, CARD_WIDTH_CHOICES, CARD_WIDTH_FILL } =
+    await loadCommon('settings-schema.js');
+
+  const derived = [
+    ...WIDGET_IDS.map((id) => [`widget${id.charAt(0).toUpperCase()}${id.slice(1)}`, `widget id "${id}"`]),
+    ...COLUMN_CHOICES.map((n) => [`columns${n}`, `column choice ${n}`]),
+    ...CARD_WIDTH_CHOICES.map((px) => [
+      px === CARD_WIDTH_FILL ? 'cardWidthFill' : `cardWidth${px}`,
+      `card width choice ${px}`,
+    ]),
+  ];
+
+  const missing = [];
+  for (const [key, origin] of derived) {
+    if (!(key in en)) missing.push(`${key} (en, derived from ${origin})`);
+    if (!(key in ja)) missing.push(`${key} (ja, derived from ${origin})`);
+  }
+  assert.deepEqual(missing, [], 'settings-view.js derives these keys but _locales does not define them');
+});
+
+// The test above re-types the three expressions rather than calling them, so it cannot see a
+// change to the derivation itself. This pins them: change one and this fails, naming the file
+// to edit. Delete an entry here when its key stops being derived.
+test('the settings drawer still builds its keys the way the test above assumes', () => {
+  const src = fs.readFileSync(path.join(EXT, 'sidepanel', 'settings-view.js'), 'utf8');
+  const expressions = [
+    '`columns${n}`',
+    "px === CARD_WIDTH_FILL ? 'cardWidthFill' : `cardWidth${px}`",
+    '`widget${id.charAt(0).toUpperCase()}${id.slice(1)}`',
+  ];
+  const gone = expressions.filter((expr) => !src.includes(expr));
+  assert.deepEqual(gone, [],
+    'settings-view.js changed how it builds a label key — the test above copies these expressions verbatim and has to change with it');
+});
+
+test('every widget declares a heading both locales define, and its drawer row agrees', async () => {
+  const { WIDGET_IDS } = await loadCommon('settings-schema.js');
+
+  // Pair `id` with `titleKey` inside each widget module. Scanning for the two tokens and
+  // pairing them by proximity tolerates either declaration order, either quote style, and
+  // comments in between; an empty titleKey is legal (widgets.js: "'' for no heading").
+  // Unquoted ids are skipped on purpose: sessions.js has one in a @typedef and one built
+  // from a template literal, and neither is a widget declaration.
+  const tokens = [];
+  for (const file of walk(path.join(EXT, 'sidepanel', 'widgets'), (f) => f.endsWith('.js'))) {
+    const rel = path.relative(EXT, file);
+    fs.readFileSync(file, 'utf8').split('\n').forEach((line, n) => {
+      const id = line.match(/\bid:\s*['"]([A-Za-z][A-Za-z0-9]*)['"]/);
+      if (id) tokens.push({ kind: 'id', value: id[1], file: rel, line: n });
+      const title = line.match(/\btitleKey:\s*['"]([A-Za-z0-9]*)['"]/);
+      if (title) tokens.push({ kind: 'titleKey', value: title[1], file: rel, line: n });
+    });
+  }
+
+  const used = new Set();
+  const declared = new Map();
+  for (const tok of tokens) {
+    if (tok.kind !== 'id') continue;
+    const mate = tokens.find((t) => t.kind === 'titleKey' && t.file === tok.file
+      && !used.has(t) && Math.abs(t.line - tok.line) <= 6);
+    if (!mate) continue;
+    used.add(mate);
+    declared.set(tok.value, { titleKey: mate.value, file: tok.file, line: tok.line + 1 });
+  }
+
+  // Anchoring on the id set, not on a count, is what makes a widget the scan missed loud.
+  assert.deepEqual([...declared.keys()].sort(), [...WIDGET_IDS].sort(),
+    'every id in WIDGET_IDS must come from a widget module declaring `id` and `titleKey` within six lines of each other');
+
+  const problems = [];
+  for (const [id, { titleKey, file, line }] of declared) {
+    if (!titleKey) continue; // a widget may render no heading at all
+    const derived = `widget${id.charAt(0).toUpperCase()}${id.slice(1)}`;
+    for (const [name, table] of [['en', en], ['ja', ja]]) {
+      const heading = table[titleKey]?.message;
+      if (heading === undefined) {
+        problems.push(`${name}: ${file}:${line} is titled ${titleKey}, which no locale defines`);
+        continue;
+      }
+      const label = table[derived]?.message;
+      if (label !== heading) {
+        problems.push(`${name}: the drawer row says "${label}" (${derived}) but ${file}:${line} says "${heading}" (${titleKey})`);
+      }
+    }
+  }
+  assert.deepEqual(problems, [],
+    'the drawer checkbox and the widget heading name the same tool and must read identically');
 });

@@ -24,6 +24,7 @@ const MAX_TABS_PER_SESSION = 500;
 export const sessions = {
   id: 'sessions',
   titleKey: 'widgetSessions',
+  iconId: 'i-layers',
   mount(body, ctx) {
     const save = document.createElement('button');
     save.type = 'button';

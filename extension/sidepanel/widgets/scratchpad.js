@@ -22,6 +22,7 @@ const MAX_CHARS = 8000;
 export const scratchpad = {
   id: 'scratchpad',
   titleKey: 'widgetScratchpad',
+  iconId: 'i-note',
   mount(body) {
     const area = document.createElement('textarea');
     area.className = 'w-pad';

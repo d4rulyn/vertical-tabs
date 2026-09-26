@@ -14,6 +14,11 @@ const openNowButton = document.getElementById('open-now');
 const appearanceButton = document.getElementById('open-appearance');
 const manualUrl = document.getElementById('manual-url');
 const versionLine = document.getElementById('version');
+const bookmarksButton = document.getElementById('bookmarks-permission');
+const bookmarksStatus = document.getElementById('bookmarks-status');
+
+/** The one optional permission this extension asks for (sidepanel/bookmarks.js). */
+const BOOKMARKS = { permissions: ['bookmarks'] };
 
 /** Resolved long before any click so the gesture is never spent on an await. */
 let hostWindowId = null;
@@ -64,4 +69,59 @@ if (appearanceButton) {
 
 if (versionLine) {
   versionLine.textContent = t('version', [chrome.runtime.getManifest().version]);
+}
+
+/* ── The optional bookmarks permission ──────────────────────────────────────
+ *
+ * The side column asks for this itself, but its prompt can be missed: it is measured
+ * (.agent/probe-results.md Probe 7) that `permissions.request()` simply stays pending
+ * while Chrome's bubble goes unanswered, and a bubble raised from the side panel is
+ * easy not to notice. So the column offers this page as the way through, and this page
+ * has to be able to finish the job — which is what the button below is.
+ */
+
+/** @param {string} text '' hides the line */
+function setBookmarksStatus(text) {
+  if (!bookmarksStatus) return;
+  bookmarksStatus.textContent = text;
+  bookmarksStatus.hidden = text === '';
+}
+
+/** @param {boolean} granted */
+function renderBookmarks(granted) {
+  if (!bookmarksButton) return;
+  bookmarksButton.dataset.granted = granted ? '1' : '0';
+  // The promise in the card's own copy: "you can take it back whenever you like".
+  bookmarksButton.textContent = granted ? t('bookmarksRevoke') : t('bookmarksGrantButton');
+}
+
+if (bookmarksButton) {
+  chrome.permissions.contains(BOOKMARKS)
+    .then(renderBookmarks)
+    .catch(() => renderBookmarks(false));
+
+  // The events, not the promises: a grant made in another tab, or from the side panel,
+  // has to reach this button too.
+  chrome.permissions.onAdded.addListener((p) => {
+    if (!(p.permissions || []).includes('bookmarks')) return;
+    setBookmarksStatus('');
+    renderBookmarks(true);
+  });
+  chrome.permissions.onRemoved.addListener((p) => {
+    if (!(p.permissions || []).includes('bookmarks')) return;
+    setBookmarksStatus('');
+    renderBookmarks(false);
+  });
+
+  bookmarksButton.addEventListener('click', () => {
+    // Nothing is awaited in front of either call: the request must go out inside the
+    // click's own user activation, exactly as it does in the panel.
+    if (bookmarksButton.dataset.granted === '1') {
+      chrome.permissions.remove(BOOKMARKS).catch(() => setBookmarksStatus(t('operationFailed')));
+      return;
+    }
+    chrome.permissions.request(BOOKMARKS)
+      .then((granted) => { if (!granted) setBookmarksStatus(t('bookmarksDenied')); })
+      .catch(() => setBookmarksStatus(t('bookmarksDenied')));
+  });
 }

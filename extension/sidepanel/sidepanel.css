@@ -519,6 +519,21 @@ button {
 
 .rail[hidden] { display: none; }
 
+/* The bookmark rail is the other thing the column can be, and it is the same column:
+   same width token, same scrolling, same padding, so switching modes moves nothing
+   the eye has to re-find. Only one of the two rails is ever on screen — `railMode`
+   hides this one, and the tool rail hides itself the moment its list is empty — so
+   `--vt-rail-width` is still spent once, and the measured 360 px split (topbar 360 /
+   list 176 / rail 184) holds in both modes. */
+.rail--bookmarks {
+  gap: 1px;
+  font-size: 12px;
+  /* The folder header is `position: sticky` against this scrollport, so the 8 px the
+     tool rail spends above its first card would leave a gap the header jumps across on
+     the first scroll. The header carries that padding itself instead. */
+  padding-top: 0;
+}
+
 .widget__body { min-width: 0; }
 
 /* Clock */
@@ -1244,6 +1259,62 @@ button {
   text-overflow: ellipsis;
 }
 
+/* ── Tool strip ───────────────────────────────────────────────────────────── */
+
+/* Where the tools live while the column is showing bookmarks: one 28 px button each,
+   in `settings.widgets` order, directly above the bottom bar and styled as a second
+   row of it. Hidden in `tools` mode, so the bottom bar's `space-between` layout and
+   the panel's height budget are untouched for anyone who never turns bookmarks on.
+
+   `overflow-x: auto` rather than wrapping: nine tools plus the mode switch measure
+   316 px against the 344 px content box of Chrome's minimum 360 px panel, so the
+   scroll only ever appears if a future build adds tools, and when it does the strip
+   keeps its one-row height instead of eating the tab list. */
+.toolstrip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--vt-bar-height);
+  padding: 0 8px;
+  border-top: 1px solid var(--vt-divider);
+  background: var(--vt-bg);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.toolstrip::-webkit-scrollbar { height: 0; }
+
+.toolstrip .iconbtn { width: 28px; height: 28px; }
+
+/* The open tool keeps its button lit, so the sheet reads as belonging to it. */
+.toolstrip__tool[aria-expanded="true"] {
+  background: var(--vt-menu-hover);
+  color: var(--vt-text);
+}
+
+/* The way back to the tools, held apart from the tools themselves. The rule is drawn
+   outside the button so the 28 px hit target and the centred glyph are unaffected. */
+.toolstrip__mode {
+  margin-inline-start: auto;
+  position: relative;
+}
+
+/* With every tool unticked the switch is the only thing on the strip, and a rule with
+   nothing to its left is a rule dividing the strip from the edge of the panel. */
+.toolstrip__mode:first-child::before { content: none; }
+
+.toolstrip__mode::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -5px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--vt-divider);
+}
+
 /* ── Bottom bar ───────────────────────────────────────────────────────────── */
 
 .bottombar {
@@ -1412,6 +1483,10 @@ button {
   z-index: 80;
   left: 50%;
   bottom: calc(var(--vt-bar-height) + 8px);
+  /* One bar's worth of clearance by default. In bookmarks mode the tool strip is a
+     second bar of the same height above the first, and 48 px would put the toast — 31 px
+     of it — straight across the strip's buttons, including the one that says
+     "Bookmarked." right after it was pressed. */
   transform: translateX(-50%);
   max-width: calc(100% - 24px);
   padding: 7px 12px;
@@ -1421,6 +1496,14 @@ button {
   box-shadow: var(--vt-shadow);
   font-size: 12px;
   text-align: center;
+}
+
+/* `:has()` rather than a class the JS has to remember to keep in sync: the strip's own
+   `hidden` attribute is already the single answer to "is the column showing bookmarks",
+   and Chrome has supported this selector since 105 against a `minimum_chrome_version`
+   of 120. */
+body:has(#tool-strip:not([hidden])) .toast {
+  bottom: calc(var(--vt-bar-height) * 2 + 8px);
 }
 
 .toast[hidden] { display: none; }
@@ -1474,6 +1557,25 @@ button {
   color: var(--vt-text-muted);
   text-align: center;
 }
+
+/* The tool sheet: one widget, in the popover the strip anchors to its button. The
+   widget's own frame is dropped here — a bordered card inside a bordered popover is
+   two boxes saying the same thing — and the sheet is given the width the rail would
+   have spent on it, so nothing inside has to be laid out twice. */
+.popover--sheet {
+  min-width: 232px;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 8px;
+}
+
+.popover--sheet .widget {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  overflow: visible;
+}
+
+.popover--sheet .w-pad { min-height: 132px; resize: none; }
 
 /* ── Settings drawer (settings-view.js) ───────────────────────────────────── */
 
@@ -1866,6 +1968,129 @@ button {
   color: var(--vt-text-muted);
   font-variant-numeric: tabular-nums;
   font-size: 10px;
+}
+
+/* ── The bookmark column (bookmarks.js) ──────────────────────────────────────
+   176 px of usable width, so the layout is a DRILL-DOWN: one folder at a time under a
+   sticky header, never an indented tree. Rows reuse `.w-rows` / `.w-row` wholesale, so
+   hover, focus-visible and the accent rule are the ones the tools column already has —
+   the only things added here are the icon column, the folder chevron and the dot that
+   says "this page is already open". Every colour is a token, so light and dark come
+   from the same definitions as everything else. */
+.bmk { display: flex; flex-direction: column; min-width: 0; }
+
+.bmk__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  background: var(--vt-bg);
+  border-bottom: 1px solid var(--vt-divider);
+}
+
+.bmk__head .iconbtn { width: 22px; height: 22px; }
+.bmk__head .iconbtn:disabled { opacity: .4; cursor: default; }
+.bmk__head .iconbtn:disabled:hover { background: transparent; color: var(--vt-text-muted); }
+
+/* The sprite's chevron points right, which is what a folder row needs; "up one folder"
+   is the same glyph turned round rather than a tenth symbol in the sheet. */
+.bmk__back .icon { transform: rotate(180deg); }
+
+.bmk__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.bmk__list { padding-top: 4px; }
+
+.bmk__empty { padding: 8px 5px; }
+
+.bmk__more { margin-top: 6px; }
+
+/* The read failed with the permission still in place. Not the grant card — that would
+   offer something the user already gave — so it sits where the rows would have been. */
+.bmk__error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 5px;
+}
+
+.bmk__error-text { margin: 0; line-height: 1.45; }
+
+/* `.w-row` aligns on the baseline, which a 16 px favicon does not share. */
+.bmk-row { align-items: center; }
+
+.bmk-row__icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+}
+
+.icon.bmk-row__glyph {
+  width: 15px;
+  height: 15px;
+  color: var(--vt-text-muted);
+}
+
+.icon.bmk-row__chevron { width: 11px; height: 11px; opacity: .55; }
+
+.bmk-row .w-row__aside { display: inline-flex; align-items: center; gap: 4px; }
+
+/* The one mark only a tab manager can draw. */
+.bmk-row__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vt-accent);
+}
+
+/* ── Asking for the permission ──────────────────────────────────────────────
+   The whole column, because there is nothing else to show until the answer comes. */
+.bmk-grant {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+}
+
+.bmk-grant__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.bmk-grant__body { margin: 0; line-height: 1.45; }
+
+.bmk-grant__pending {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0;
+}
+
+.bmk-grant__escape {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--vt-accent);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* The notes pad takes whatever height is left over, so the column ends at the bottom

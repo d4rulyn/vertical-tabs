@@ -143,6 +143,14 @@ html, body {
 .tips li { margin-bottom: 10px; }
 .tips li:last-child { margin-bottom: 0; }
 
+.card__title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.card__body { margin: 0; }
+
 .permissions { margin: 0; }
 
 .manual-url {

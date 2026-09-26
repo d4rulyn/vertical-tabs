@@ -8,6 +8,7 @@ const {
   COLUMNS_MIN, COLUMNS_MAX, COLUMN_CHOICES, normalizeColumns, layoutForColumns,
   CARD_WIDTH_CHOICES, CARD_WIDTH_FILL, WIDGET_IDS, normalizeWidgets,
   PREVIEW_MOMENTS, normalizePreviewMoment,
+  RAIL_MODES, normalizeRailMode,
 } = await loadCommon('settings-schema.js');
 
 // Binding default object (spec.md §10, spec-addendum.md A12; the `layout` enum from
@@ -18,6 +19,8 @@ const EXPECTED_DEFAULTS = {
   columns: 1,
   cardWidth: 0,
   widgets: ['sessions', 'recent', 'windows', 'autoGroup', 'duplicates', 'staleTabs', 'scratchpad'],
+  // The side column shows the tools, as it always has; bookmarks are opt-in.
+  railMode: 'tools',
   showThumbnails: true,
   previewMoment: 'top',
   refreshInterval: '1m',
@@ -146,7 +149,10 @@ test('the rest of an old settings object survives the migration untouched', () =
     // they take their defaults — and the preview default is the one that changes what
     // an upgraded install sees, so it is asserted here rather than assumed.
     version: 2, theme: 'light', columns: 2, cardWidth: 0,
-    widgets: ['sessions', 'recent', 'windows', 'autoGroup', 'duplicates', 'staleTabs', 'scratchpad'], showThumbnails: false,
+    widgets: ['sessions', 'recent', 'windows', 'autoGroup', 'duplicates', 'staleTabs', 'scratchpad'],
+    // `railMode` did not exist when this object was written either, and an upgraded
+    // install must land on the tool rail it already had.
+    railMode: 'tools', showThumbnails: false,
     previewMoment: 'top', refreshInterval: '5m', captureWhenPanelClosed: false, captureBeforeSwitch: false,
     persistThumbnails: false, excludedHosts: ['example.com'], pinnedGrid: false,
     middleClickCloses: false, doubleClickNewTab: false, showUnreadDot: false,
@@ -247,4 +253,30 @@ test('normalizeSettings carries previewMoment through', () => {
   assert.equal(normalizeSettings({ previewMoment: 'reload' }).previewMoment, 'reload');
   assert.equal(normalizeSettings({ previewMoment: 'nonsense' }).previewMoment, 'top');
   assert.equal(normalizeSettings({}).previewMoment, 'top');
+});
+
+// railMode — which of the two things the column beside the tabs holds. The extension
+// is already published, so the default is the binding part: an update must not move
+// anyone off the tool rail they already have.
+test('railMode is tools until the user says otherwise', () => {
+  assert.equal(DEFAULTS.railMode, 'tools');
+  assert.deepEqual([...RAIL_MODES], ['tools', 'bookmarks']);
+  for (const mode of RAIL_MODES) assert.equal(normalizeRailMode(mode), mode);
+  for (const junk of ['', 'Tools', 'bookmark', null, undefined, 1, {}, ['tools']]) {
+    assert.equal(normalizeRailMode(junk), 'tools');
+  }
+});
+
+// `saveSettings()` round-trips every patch through `normalizeSettings()`, so a key it
+// forgets to assign is dropped on the first write with no error anywhere.
+test('normalizeSettings carries railMode through', () => {
+  assert.equal(normalizeSettings({ railMode: 'bookmarks' }).railMode, 'bookmarks');
+  assert.equal(normalizeSettings({ railMode: 'nonsense' }).railMode, 'tools');
+  assert.equal(normalizeSettings({}).railMode, 'tools');
+  // Choosing bookmarks must never rewrite the user's own tool list: flipping back has
+  // to restore it exactly, and the derived empty list is what hides the rail instead.
+  assert.deepEqual(
+    normalizeSettings({ railMode: 'bookmarks', widgets: ['sessions', 'scratchpad'] }).widgets,
+    ['sessions', 'scratchpad'],
+  );
 });

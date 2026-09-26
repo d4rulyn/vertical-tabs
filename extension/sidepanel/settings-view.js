@@ -95,14 +95,30 @@ const SECTIONS = [
     ],
   },
   {
-    titleKey: 'settingsWidgets',
+    // The column beside the tabs holds one of two things, so the choice between them
+    // comes before the tool list it governs. Switching to bookmarks hides the tools by
+    // handing `widgets.apply()` a DERIVED empty list — `widgets` below is never
+    // rewritten, so the ticks here survive the round trip.
+    titleKey: 'settingsSideColumn',
     helpKey: 'settingsWidgetsHelp',
-    rows: WIDGET_IDS.map((id) => ({
-      key: `widget-${id}`,
-      type: 'widget',
-      widgetId: id,
-      labelKey: `widget${id.charAt(0).toUpperCase()}${id.slice(1)}`,
-    })),
+    rows: [
+      {
+        key: 'railMode',
+        type: 'select',
+        labelKey: 'settingsRailMode',
+        helpKey: 'settingsRailModeHelp',
+        options: [
+          ['tools', 'railModeTools'],
+          ['bookmarks', 'railModeBookmarks'],
+        ],
+      },
+      ...WIDGET_IDS.map((id) => ({
+        key: `widget-${id}`,
+        type: 'widget',
+        widgetId: id,
+        labelKey: `widget${id.charAt(0).toUpperCase()}${id.slice(1)}`,
+      })),
+    ],
   },
   {
     titleKey: 'settingsBehavior',

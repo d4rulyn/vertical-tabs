@@ -27,6 +27,7 @@ const REPAINT_DEBOUNCE_MS = 400;
 export const windowList = {
   id: 'windows',
   titleKey: 'widgetWindows',
+  iconId: 'i-window',
   mount(body, ctx) {
     const list = document.createElement('div');
     list.className = 'w-rows';

@@ -252,14 +252,40 @@ if (chrome.sidePanel?.onClosed) {
 
 /* ── Site access can be withheld and re-granted at any time (A7d) ───────────────── */
 
+/**
+ * Whether a permissions event can have changed what is capturable.
+ *
+ * A7d is about SITE access, and `onPermissionsChanged()` is expensive: it throws away the
+ * "this URL can never be captured" memo and re-captures the active tab of every open
+ * window at the measured ≥1100 ms serialisation. `optional_permissions: ["bookmarks"]`
+ * made this listener fire for a permission that cannot affect a capture at all, so
+ * pressing Allow in the bookmark column would kick off a full re-scan as a side effect.
+ *
+ * Conservative on purpose: anything that names an origin, names nothing, or arrives in a
+ * shape this does not recognise still counts.
+ *
+ * @param {{ permissions?: string[], origins?: string[] }} [perms]
+ * @returns {boolean}
+ */
+function affectsCapture(perms) {
+  if (!perms) return true;
+  const origins = Array.isArray(perms.origins) ? perms.origins : [];
+  if (origins.length > 0) return true;
+  const api = Array.isArray(perms.permissions) ? perms.permissions : [];
+  if (api.length === 0) return true;
+  return api.some((name) => name !== 'bookmarks');
+}
+
 if (chrome.permissions?.onAdded) {
-  chrome.permissions.onAdded.addListener(() => {
+  chrome.permissions.onAdded.addListener((perms) => {
+    if (!affectsCapture(perms)) return;
     capture.onPermissionsChanged();
   });
 }
 
 if (chrome.permissions?.onRemoved) {
-  chrome.permissions.onRemoved.addListener(() => {
+  chrome.permissions.onRemoved.addListener((perms) => {
+    if (!affectsCapture(perms)) return;
     capture.onPermissionsChanged();
   });
 }

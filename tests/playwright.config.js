@@ -5,7 +5,10 @@ const { defineConfig } = require('@playwright/test');
 const OUT = process.env.OUT_DIR || path.resolve(__dirname, 'output');
 
 module.exports = defineConfig({
-  testDir: './specs',
+  // Regression specs live in ./specs. One-shot platform probes live in ./probes and are
+  // NOT part of a normal run (they deliberately wait on things that never resolve).
+  // Run one with: VT_TEST_DIR=./probes playwright test <file> --reporter=line --retries=0
+  testDir: process.env.VT_TEST_DIR || './specs',
   // One extension instance owns the captureVisibleTab quota (~1 call/second for the
   // whole extension), so parallel workers would fight over it.
   workers: 1,

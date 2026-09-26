@@ -18,6 +18,8 @@
  *   {
  *     id,                 // stable key, stored in settings
  *     titleKey,           // i18n key for the heading, '' for no heading
+ *     iconId,             // OPTIONAL sprite symbol id for the tool strip, e.g.
+ *                         // 'i-clock'; a widget that omits it gets a generic glyph
  *     mount(body, ctx),   // fill `body`; may return a teardown function
  *   }
  *
@@ -49,6 +51,19 @@ const t = (key, subs) => i18n.t(key, subs);
 /** @type {{ rail: HTMLElement|null, ctx: any, mounted: Map<string, Function|null>, order: string[] }} */
 const state = { rail: null, ctx: null, mounted: new Map(), order: [] };
 
+/**
+ * Widgets mounted somewhere OTHER than the rail — today the tool strip's sheet.
+ *
+ * Deliberately a second map, not `state.mounted`. `apply()` treats `state.mounted` as
+ * "what is in the rail": a sheet-mounted widget listed there would be torn down by the
+ * next diff pass, whose `rail.querySelector('[data-widget="…"]')` then finds nothing to
+ * remove, because the element is in the sheet. The result is a live node with a dead
+ * teardown — a scratchpad that no longer saves — which no test would notice.
+ *
+ * @type {Map<string, { el: Element|null, teardown: Function|null }>}
+ */
+const detached = new Map();
+
 /* ── Registry ────────────────────────────────────────────────────────────── */
 
 /** Every widget the rail knows how to build, by id. */
@@ -56,6 +71,21 @@ const REGISTRY = new Map(
   [sessions, recentTabs, windowList, autoGroup, duplicates, staleTabs, listIO, nowPlaying, scratchpad]
     .map((w) => [w.id, w]),
 );
+
+/**
+ * The widget object behind an id, or `null`.
+ *
+ * Exported so the tool strip can read each tool's own `titleKey` and `iconId` instead
+ * of keeping a table of its own. The nine ids already appear in `WIDGET_IDS`, in the
+ * registry above and in `22-widgets.spec.js`; a fourth list is exactly how the strings
+ * and the widgets drifted apart once already.
+ *
+ * @param {string} id
+ * @returns {any|null}
+ */
+export function getWidget(id) {
+  return REGISTRY.get(id) || null;
+}
 
 /* ── Rail ────────────────────────────────────────────────────────────────── */
 
@@ -94,6 +124,12 @@ export function apply(ids) {
 
   for (const id of wanted) {
     if (state.mounted.has(id)) continue;
+    // The same widget must never run in two places. Switching the side column back to
+    // the tools while one of them is open in the strip's sheet mounts the rail's copy
+    // in this very loop, so the sheet's copy is torn down FIRST: the scratchpad commits
+    // its last edit from that teardown, and issuing that write before the new copy's
+    // read is the only ordering this file can offer it.
+    unmountOne(id);
     try {
       state.mounted.set(id, build(REGISTRY.get(id), rail));
     } catch (e) {
@@ -110,6 +146,54 @@ export function apply(ids) {
 
   state.order = wanted;
   rail.hidden = wanted.length === 0;
+}
+
+/* ── One widget, somewhere else ──────────────────────────────────────────── */
+
+/**
+ * Build one widget into `host`, outside the rail. Used by the tool strip, which shows
+ * a single tool at a time in a sheet; `host` is that sheet.
+ *
+ * Mounting the same id twice is a no-op'd remount: the previous copy is torn down
+ * first, so a widget is never running in two places.
+ *
+ * @param {string} id
+ * @param {HTMLElement} host
+ * @returns {boolean} whether a widget was built
+ */
+export function mountOne(id, host) {
+  const widget = REGISTRY.get(id);
+  if (!widget || !(host instanceof HTMLElement)) return false;
+  unmountOne(id);
+  /** @type {Function|null} */
+  let teardown = null;
+  try {
+    teardown = build(widget, host);
+  } catch (e) {
+    log.warn('widget mount', id, e);
+  }
+  // Read back rather than trusting `build()`'s append: whatever ended up in the host
+  // is what has to come out again, even if `mount()` threw half way through.
+  detached.set(id, { el: host.querySelector(`[data-widget="${id}"]`), teardown });
+  return true;
+}
+
+/**
+ * Tear down and remove a widget mounted by `mountOne()`. Safe to call for an id that
+ * is not mounted, and it never touches the rail's own copy of that widget.
+ *
+ * @param {string} id
+ */
+export function unmountOne(id) {
+  const entry = detached.get(id);
+  if (!entry) return;
+  detached.delete(id);
+  try {
+    if (typeof entry.teardown === 'function') entry.teardown();
+  } catch (e) {
+    log.warn('widget teardown', id, e);
+  }
+  if (entry.el) entry.el.remove();
 }
 
 /** @param {any} widget @param {HTMLElement} rail @returns {Function|null} teardown */
@@ -139,6 +223,9 @@ function sameOrder(a, b) {
 
 /** Tear everything down — `pagehide`, so timers do not outlive the document. */
 export function destroy() {
+  // Sheet-mounted widgets own timers and pending writes too: the scratchpad commits
+  // its last edit from its teardown, so skipping them here would lose it.
+  for (const id of [...detached.keys()]) unmountOne(id);
   for (const [id, teardown] of state.mounted) {
     try {
       if (typeof teardown === 'function') teardown();

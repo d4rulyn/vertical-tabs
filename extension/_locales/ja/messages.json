@@ -606,13 +606,106 @@
     "message": "ツール",
     "description": "Aria label for the widget rail"
   },
-  "settingsWidgets": {
-    "message": "ツール",
-    "description": "Settings section heading for the widget rail"
-  },
   "settingsWidgetsHelp": {
     "message": "パネルは 360 px より細くできないため、タブの横に空く分をここで使います。いずれもネットワークを使いません。すべて外すと列ごと消えます。",
     "description": "Help text under the widget list"
+  },
+  "settingsSideColumn": {
+    "message": "横の列",
+    "description": "Settings section heading for the column beside the tab list"
+  },
+  "settingsRailMode": {
+    "message": "横の列に表示するもの",
+    "description": "Settings label for the side-column mode select"
+  },
+  "settingsRailModeHelp": {
+    "message": "タブの横の列には、下に並ぶツールかブックマークのどちらかを表示します。ブックマークを選んでも下のチェックはそのまま残るので、戻せば同じツールがそのまま並びます。",
+    "description": "Help text under the side-column mode select"
+  },
+  "railModeTools": {
+    "message": "ツール",
+    "description": "Side-column mode option: the tool rail"
+  },
+  "railModeBookmarks": {
+    "message": "ブックマーク",
+    "description": "Side-column mode option: the bookmark rail"
+  },
+  "railSwitchToTools": {
+    "message": "ツールに切り替える",
+    "description": "Label on the control that switches the side column back to tools"
+  },
+  "toolStrip": {
+    "message": "ツール",
+    "description": "Aria label for the horizontal strip of tool buttons above the bottom bar"
+  },
+  "bookmarks": {
+    "message": "ブックマーク",
+    "description": "Aria label and heading for the bookmark rail"
+  },
+  "bookmarksGrantTitle": {
+    "message": "ブックマークの表示には許可が必要です",
+    "description": "Heading of the permission prompt inside the bookmark rail"
+  },
+  "bookmarksGrantBody": {
+    "message": "この許可は Chrome が別にたずねるもので、インストール時には求めません。許可するまで何も読み取りませんし、いつでも取り消せます。",
+    "description": "Body of the permission prompt inside the bookmark rail"
+  },
+  "bookmarksGrantButton": {
+    "message": "ブックマークを許可",
+    "description": "Button that asks Chrome for the optional bookmarks permission"
+  },
+  "bookmarksGrantPending": {
+    "message": "Chrome の応答を待っています…",
+    "description": "Shown while Chrome's own permission prompt is open"
+  },
+  "bookmarksGrantOpenSettings": {
+    "message": "この拡張機能の設定ページを開く",
+    "description": "Fallback button when Chrome's permission bubble went unanswered; opens welcome/welcome.html, which carries the same grant control"
+  },
+  "bookmarksDenied": {
+    "message": "許可するまでブックマークは表示されません。",
+    "description": "Shown after the permission prompt is declined or dismissed"
+  },
+  "bookmarksRevoke": {
+    "message": "ブックマークの利用をやめる",
+    "description": "Button that hands the bookmarks permission back to Chrome"
+  },
+  "bookmarksEmpty": {
+    "message": "このフォルダにはまだ何もありません",
+    "description": "Shown for a bookmark folder with no children"
+  },
+  "bookmarksUnavailable": {
+    "message": "このフォルダを読み取れませんでした。",
+    "description": "Shown in the bookmark column when a read failed although the permission is still granted"
+  },
+  "bookmarksRetry": {
+    "message": "もう一度読み込む",
+    "description": "Button that re-reads the bookmark folder after a failed read"
+  },
+  "bookmarksBack": {
+    "message": "一つ上のフォルダへ",
+    "description": "Button returning to the parent bookmark folder"
+  },
+  "bookmarksMore": {
+    "message": "ほか $COUNT$ 件",
+    "description": "Footer of a folder listing that was cut short",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarksAddCurrentTab": {
+    "message": "このタブをブックマーク",
+    "description": "The one write the bookmark rail performs"
+  },
+  "bookmarksAdded": {
+    "message": "ブックマークに追加しました。",
+    "description": "Toast after saving the current tab as a bookmark"
+  },
+  "bookmarksAlreadyOpen": {
+    "message": "そのページはすでに開いています",
+    "description": "Shown when a bookmark's page is open in a tab already"
   },
   "widgetListIO": {
     "message": "一覧の出し入れ",
@@ -1124,6 +1217,10 @@
   "widgetStale": {
     "message": "放置中のタブ",
     "description": "widgetStale (widget)"
+  },
+  "widgetStaleTabs": {
+    "message": "放置中のタブ",
+    "description": "widgetStaleTabs (settings) — the drawer derives this key from the widget id `staleTabs`, so it must exist alongside widgetStale and say the same thing"
   },
   "widgetStaleNone": {
     "message": "放置しているタブはありません",

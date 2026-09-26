@@ -606,13 +606,106 @@
     "message": "Tools",
     "description": "Aria label for the widget rail"
   },
-  "settingsWidgets": {
-    "message": "Tools",
-    "description": "Settings section heading for the widget rail"
-  },
   "settingsWidgetsHelp": {
     "message": "Chrome will not let the panel be narrower than 360 px, so the space beside the tabs holds these instead. None of them uses the network. Untick them all to hide the column.",
     "description": "Help text under the widget list"
+  },
+  "settingsSideColumn": {
+    "message": "Side column",
+    "description": "Settings section heading for the column beside the tab list"
+  },
+  "settingsRailMode": {
+    "message": "Show in the side column",
+    "description": "Settings label for the side-column mode select"
+  },
+  "settingsRailModeHelp": {
+    "message": "The column beside the tabs holds either the tools listed below or your bookmarks. Choosing bookmarks leaves the ticks below untouched, so switching back brings the same tools straight back.",
+    "description": "Help text under the side-column mode select"
+  },
+  "railModeTools": {
+    "message": "Tools",
+    "description": "Side-column mode option: the tool rail"
+  },
+  "railModeBookmarks": {
+    "message": "Bookmarks",
+    "description": "Side-column mode option: the bookmark rail"
+  },
+  "railSwitchToTools": {
+    "message": "Show tools instead",
+    "description": "Label on the control that switches the side column back to tools"
+  },
+  "toolStrip": {
+    "message": "Tools",
+    "description": "Aria label for the horizontal strip of tool buttons above the bottom bar"
+  },
+  "bookmarks": {
+    "message": "Bookmarks",
+    "description": "Aria label and heading for the bookmark rail"
+  },
+  "bookmarksGrantTitle": {
+    "message": "Bookmarks need your permission first",
+    "description": "Heading of the permission prompt inside the bookmark rail"
+  },
+  "bookmarksGrantBody": {
+    "message": "Chrome asks for this separately and it is never requested on install. Nothing is read until you allow it, and you can take it back whenever you like.",
+    "description": "Body of the permission prompt inside the bookmark rail"
+  },
+  "bookmarksGrantButton": {
+    "message": "Allow bookmarks",
+    "description": "Button that asks Chrome for the optional bookmarks permission"
+  },
+  "bookmarksGrantPending": {
+    "message": "Waiting for Chrome…",
+    "description": "Shown while Chrome's own permission prompt is open"
+  },
+  "bookmarksGrantOpenSettings": {
+    "message": "Open this extension's own settings page",
+    "description": "Fallback button when Chrome's permission bubble went unanswered; opens welcome/welcome.html, which carries the same grant control"
+  },
+  "bookmarksDenied": {
+    "message": "Bookmarks stay hidden until permission is given.",
+    "description": "Shown after the permission prompt is declined or dismissed"
+  },
+  "bookmarksRevoke": {
+    "message": "Stop using bookmarks",
+    "description": "Button that hands the bookmarks permission back to Chrome"
+  },
+  "bookmarksEmpty": {
+    "message": "Nothing saved here yet",
+    "description": "Shown for a bookmark folder with no children"
+  },
+  "bookmarksUnavailable": {
+    "message": "Chrome would not hand over this folder.",
+    "description": "Shown in the bookmark column when a read failed although the permission is still granted"
+  },
+  "bookmarksRetry": {
+    "message": "Try again",
+    "description": "Button that re-reads the bookmark folder after a failed read"
+  },
+  "bookmarksBack": {
+    "message": "Up one folder",
+    "description": "Button returning to the parent bookmark folder"
+  },
+  "bookmarksMore": {
+    "message": "$COUNT$ more",
+    "description": "Footer of a folder listing that was cut short",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarksAddCurrentTab": {
+    "message": "Bookmark this tab",
+    "description": "The one write the bookmark rail performs"
+  },
+  "bookmarksAdded": {
+    "message": "Bookmarked.",
+    "description": "Toast after saving the current tab as a bookmark"
+  },
+  "bookmarksAlreadyOpen": {
+    "message": "That page is already open",
+    "description": "Shown when a bookmark's page is open in a tab already"
   },
   "widgetListIO": {
     "message": "List in and out",
@@ -1124,6 +1217,10 @@
   "widgetStale": {
     "message": "Idle tabs",
     "description": "widgetStale (widget)"
+  },
+  "widgetStaleTabs": {
+    "message": "Idle tabs",
+    "description": "widgetStaleTabs (settings) — the drawer derives this key from the widget id `staleTabs`, so it must exist alongside widgetStale and say the same thing"
   },
   "widgetStaleNone": {
     "message": "Nothing has gone idle",

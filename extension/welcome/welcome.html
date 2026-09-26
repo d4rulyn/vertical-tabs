@@ -36,6 +36,20 @@
       <p id="manual-url" class="manual-url" hidden></p>
     </section>
 
+    <!-- The optional `bookmarks` permission. It is never asked for on install, and the
+         side column shows a card asking for it rather than reading anything. Chrome
+         only hands it over on a real click, and its prompt is easiest to see on an
+         ordinary tab — which is what this page is, and why the side panel points here
+         when its own prompt goes unanswered. The same button gives it back. -->
+    <section class="card">
+      <h2 class="card__title" data-i18n="bookmarksGrantTitle"></h2>
+      <p class="card__body" data-i18n="bookmarksGrantBody"></p>
+      <div class="actions">
+        <button id="bookmarks-permission" class="btn" type="button" data-i18n="bookmarksGrantButton"></button>
+      </div>
+      <p id="bookmarks-status" class="manual-url" hidden></p>
+    </section>
+
     <section class="card card--muted">
       <p class="permissions" data-i18n="welcomePermissions"></p>
     </section>

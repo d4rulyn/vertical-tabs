@@ -26,6 +26,7 @@ const MIN_TABS_PER_GROUP = 2;
 export const autoGroup = {
   id: 'autoGroup',
   titleKey: 'widgetAutoGroup',
+  iconId: 'i-wand',
   mount(body, ctx) {
     const summary = document.createElement('div');
     summary.className = 'w-muted';

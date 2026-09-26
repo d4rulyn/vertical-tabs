@@ -65,6 +65,14 @@ with **Load unpacked**.
   links in a window of its own, and a **notes** pad that survives a restart. Pick which ones you want in Settings; the order
   you tick them is the order they stack, and unticking them all hides the column. None of
   them uses the network or needs a permission the previews did not already require.
+- **Or bookmarks in that same column**: switch the column from tools to bookmarks and it
+  becomes your own folders, one level at a time — click a row to open it, a dot marks
+  anything already open in a tab, and one button bookmarks the tab you are on. This is the
+  one feature that does ask for a permission the previews did not already require, and it
+  asks the first time you switch to it, never at install: `bookmarks` is declared in
+  `optional_permissions`. Apart from that one button it is read-only — no renaming, no
+  deleting, no reordering, no dragging between the two lists. Switching back restores your
+  tools exactly as they were, because the tool list itself is never rewritten.
 - **Lock a tab**: right-click, *Lock this tab*. A locked tab **cannot be closed from this
   panel** — not by the card's close button, not by *Close tab*, not by *Close the other
   tabs*, not by the duplicate finder. Chrome's own close button and Ctrl+W **still close
@@ -284,11 +292,12 @@ The Shortcuts section shows the current key bindings and links to
 | `favicon` | Falls back to Chrome's favicon service while a page is still loading. | none |
 | `alarms` | The periodic preview refresh and the cache maintenance job. | none |
 | `scripting` | Reads the scroll offset when **Previews show** is set to the top of the page. The one value read is `window.scrollY`; nothing is written to the page. | — (not verified on a real install) |
+| `optional_permissions: bookmarks` | The bookmarks layout of the side column. Reads the tree to draw the list; the only write is *Bookmark this tab*. **Optional** — not in `permissions`, so it is not requested at install, and never requested at all unless you switch that column to bookmarks and press its grant button. | none at install. The runtime prompt shown when you grant it: — (not read on real Chrome yet) |
 
 Deliberately **not** requested: `activeTab`, content scripts, `contextMenus`,
 `offscreen`. The extension injects nothing into web pages.
 
-The two cells marked "—" are filled in once the install prompt has been read on real Chrome
+The cells marked "—" are filled in once the prompts have been read on real Chrome
 (see [Manual checks](#manual-checks)); this README does not guess at strings it has not seen.
 
 ---
@@ -302,6 +311,11 @@ The two cells marked "—" are filled in once the install prompt has been read o
   weather and a calendar tool were built and then removed for exactly this reason: neither
   was worth spending that sentence on. `tests/specs/22-widgets.spec.js` asserts it with
   every tool on screen, so the promise fails a test rather than quietly rotting.
+- **Bookmarks are read, not collected.** With the bookmarks layout granted, the extension
+  reads your bookmark tree to draw the list and does nothing else with it: it is never
+  copied into the extension's own storage, and — like everything else here — never sent
+  anywhere. Revoke the permission in `chrome://extensions` and the column goes straight
+  back to asking for it.
 - **Incognito tabs are never captured**, whatever the settings say.
 - `chrome://` pages, the Chrome Web Store, other extensions' pages, `data:` and `about:blank`
   are never captured — Chrome does not allow it.
