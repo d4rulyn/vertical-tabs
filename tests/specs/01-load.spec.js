@@ -59,11 +59,22 @@ test('manifest, panel behaviour and alarms are as specified', async ({ serviceWo
     message: 'chrome.action.setTitle({ title }) must run at every service worker start and carry the current binding',
   }).toBe(true);
 
+  // Both alarms are created during service-worker start, and `vt-refresh` needs the
+  // settings read first, so it lands strictly later than `vt-maintenance`. Reading
+  // `getAll()` once raced that: measured 2026-09-30, one read failed in 3 of 6 runs on
+  // BOTH main and the branch under test. Polling is not a relaxation — both names are
+  // still required, and the timeout still fails a worker that never registers them —
+  // it removes the assumption that the read and the registration are ordered.
+  await expect.poll(async () => swEval(serviceWorker, async () =>
+    (await chrome.alarms.getAll()).map((a) => a.name).sort()), {
+    timeout: 15_000,
+    message: 'the service worker registers both alarms at start; the default refreshInterval is 1m',
+  }).toEqual(['vt-maintenance', 'vt-refresh']);
+
   const alarms = await swEval(serviceWorker, async () =>
     (await chrome.alarms.getAll()).map((a) => ({ name: a.name, periodInMinutes: a.periodInMinutes })));
-  const alarmNames = alarms.map((a) => a.name);
-  expect(alarmNames).toContain('vt-maintenance');
-  expect(alarmNames).toContain('vt-refresh'); // default refreshInterval is '1m'
+  expect(alarms.find((a) => a.name === 'vt-refresh').periodInMinutes,
+    'the default refreshInterval is 1m').toBe(1);
 });
 
 test('sidePanel.getLayout() reports which side Chrome docks the panel on', async ({ serviceWorker }) => {

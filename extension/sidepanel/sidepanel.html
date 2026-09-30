@@ -80,6 +80,14 @@
        as everything above so a row of them reads as one set. `i-tool` is both the
        strip's "put the tools back in the column" toggle and the glyph any future
        widget gets when it declares no `iconId` of its own. -->
+  <!-- The side column itself: a panel with its right-hand strip marked off. The topbar
+       toggle changes WHAT IS IN that strip, so the strip is the thing to draw — a second
+       ribbon there would sit 14 px above the column's own ribbon button and mean
+       something else. -->
+  <symbol id="i-sidecolumn" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.5"/>
+    <path d="M9.9 3.2v9.6"/>
+  </symbol>
   <symbol id="i-bookmark" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
     <path d="M4.2 3.4a1 1 0 0 1 1-1h5.6a1 1 0 0 1 1 1v10L8 10.9 4.2 13.4z"/>
   </symbol>
@@ -132,6 +140,11 @@
     <button id="search-clear" class="iconbtn" type="button" hidden
             data-i18n-attr="aria-label:clearSearch;title:clearSearch"><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button>
   </div>
+  <!-- The one control this feature is about. Burying it in the drawer meant nobody
+       found it; here it is one press either way, and `aria-pressed` says which way
+       the column is currently set. -->
+  <button id="btn-rail-mode" class="iconbtn" type="button" data-testid="rail-mode-button" aria-pressed="false"
+          data-i18n-attr="aria-label:railModeButton"><svg class="icon" aria-hidden="true"><use href="#i-sidecolumn"></use></svg></button>
   <button id="btn-settings" class="iconbtn" type="button" data-testid="settings-button" aria-haspopup="dialog" aria-expanded="false"
           data-i18n-attr="aria-label:settings;title:settings"><svg class="icon" aria-hidden="true"><use href="#i-gear"></use></svg></button>
 </header>

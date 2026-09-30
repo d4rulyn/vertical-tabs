@@ -77,6 +77,33 @@ const GRANT_HINT_MS = 10000;
  */
 const ROOT_ID = '0';
 
+/**
+ * How many distinct stripe colours the roots cycle through. A profile signed into two
+ * accounts shows two "Bookmarks bar" and two "Other bookmarks" under the root with the
+ * same names, so the name alone cannot say which is which; the stripe can.
+ */
+const BAR_COLOURS = 6;
+
+/**
+ * Indentation stops after this many levels. 176 px of column minus a 16 px favicon does
+ * not have room to keep giving ground, and past this depth the stripe and the expanded
+ * chevrons above are what locate a row.
+ */
+const MAX_INDENT_LEVELS = 5;
+
+/**
+ * A ceiling on `getChildren` calls per paint. Folders past it are closed rather than
+ * left open-but-unread, so the budget does not get spent on the same ones every time.
+ */
+const MAX_TREE_READS = 200;
+
+/**
+ * A ceiling on the rows one flatten builds. The read budget does not bound this — 200
+ * folders of 400 links is 80 000 rows, built synchronously before any chunking gets a
+ * say — so the flatten has its own.
+ */
+const MAX_TREE_ROWS = 5000;
+
 /** The permission this whole file is gated on. */
 const NEEDS = Object.freeze({ permissions: ['bookmarks'] });
 
@@ -96,18 +123,19 @@ const S = {
   /** @type {'off'|'grant'|'list'} what the column is showing right now. */ phase: 'off',
   /** Rising counter that makes an older, still-awaiting `start()` stand down. */ startSeq: 0,
 
-  /** @type {string} the folder on screen. */ folderId: ROOT_ID,
-  /** @type {any[]} its children, as `getChildren` returned them. */ nodes: [],
-  /** How many of `nodes` have rows. */ rendered: 0,
-  /** @type {string|null} the folder `path` was built for. */ pathId: null,
-  /** @type {string} the folder the rows on screen belong to; `paint()` diffs on it. */ painted: '',
-  /** @type {string[]} the breadcrumb, root first; the header's name is its last. */ path: [],
+  /** @type {Set<string>} the folders that are open. Everything else is one row. */
+  expanded: new Set(),
+  /** @type {Array<{node: any, depth: number, bar: number}>} the tree, flattened. */
+  rows: [],
+  /** How many of `rows` have DOM. */ rendered: 0,
+  /** @type {string} the folder the bookmark button writes into. Never the root. */
+  addTarget: '',
   /** @type {number} scrollTop waiting to be restored after the first chunk. */ pendingScroll: 0,
   /** Rising counter that makes a late `paint()` drop its result. */ paintToken: 0,
 
   /** @type {HTMLElement|null} */ head: null,
   /** @type {HTMLElement|null} */ title: null,
-  /** @type {HTMLButtonElement|null} */ back: null,
+  /** @type {HTMLButtonElement|null} */ collapse: null,
   /** @type {HTMLButtonElement|null} */ add: null,
   /** @type {HTMLElement|null} */ list: null,
   /** @type {HTMLElement|null} */ empty: null,
@@ -244,7 +272,7 @@ function clearFrame() {
   if (S.rail) S.rail.textContent = '';
   S.head = null;
   S.title = null;
-  S.back = null;
+  S.collapse = null;
   S.add = null;
   S.list = null;
   S.empty = null;
@@ -253,11 +281,8 @@ function clearFrame() {
   S.pending = null;
   S.pendingText = null;
   S.escape = null;
-  S.nodes = [];
+  S.rows = [];
   S.rendered = 0;
-  S.pathId = null;
-  S.path = [];
-  S.painted = '';
 }
 
 /**
@@ -492,21 +517,6 @@ async function verifyPermission() {
 }
 
 /**
- * The Bookmarks bar.
- *
- * `getChildren('0')` rather than `folderType` or `ROOT_NODE_ID`: both are recent
- * additions and `minimum_chrome_version` is 120. The bar is the first root Chrome
- * returns, and every root is a folder.
- *
- * @returns {Promise<string>}
- */
-async function bookmarksBarId() {
-  const roots = await bm('getChildren', ROOT_ID);
-  const bar = Array.isArray(roots) ? roots.find(isFolder) : null;
-  return bar ? String(bar.id) : ROOT_ID;
-}
-
-/**
  * A folder has no `url` KEY at all — measured; it is absent rather than empty, and
  * `getChildren` results carry no `children` key to test instead.
  * @param {any} node
@@ -533,14 +543,15 @@ function buildFrame() {
   head.className = 'bmk__head';
   head.dataset.testid = 'bookmark-head';
 
-  const back = document.createElement('button');
-  back.type = 'button';
-  back.className = 'iconbtn bmk__back';
-  back.dataset.testid = 'bookmark-back';
-  back.setAttribute('aria-label', t('bookmarksBack'));
-  back.title = t('bookmarksBack');
-  back.append(glyph('i-chevron', 'icon'));
-  back.addEventListener('click', () => void goUp());
+  const collapse = document.createElement('button');
+  collapse.type = 'button';
+  collapse.className = 'iconbtn bmk__collapse';
+  collapse.dataset.testid = 'bookmark-collapse';
+  collapse.setAttribute('aria-label', t('bookmarksCollapseAll'));
+  collapse.title = t('bookmarksCollapseAll');
+  collapse.hidden = true;
+  collapse.append(glyph('i-chevron', 'icon'));
+  collapse.addEventListener('click', () => void collapseAll());
 
   const title = document.createElement('span');
   title.className = 'bmk__title';
@@ -557,15 +568,16 @@ function buildFrame() {
   add.append(glyph('i-bookmark', 'icon'));
   add.addEventListener('click', () => void addCurrentTab());
 
-  head.append(back, title, add);
+  head.append(collapse, title, add);
 
-  // A flat list of one level, not a tree: `listbox`/`option` with a roving tabindex is
-  // what that is. An indented tree in 176 px is unreadable, which is why the column
-  // drills down instead.
+  // A tree with a roving tabindex. The DOM is flat — one button per visible row — and
+  // `aria-level` carries the nesting, which keeps the chunked rendering and the arrow
+  // keys working on one list instead of on nested containers.
   const list = document.createElement('div');
   list.className = 'w-rows bmk__list';
   list.dataset.testid = 'bookmark-list';
-  list.setAttribute('role', 'listbox');
+  list.setAttribute('role', 'tree');
+  list.setAttribute('aria-label', t('bookmarks'));
   list.addEventListener('click', onListClick);
   list.addEventListener('auxclick', onListAuxClick);
   list.addEventListener('mousedown', onListMouseDown);
@@ -616,7 +628,7 @@ function buildFrame() {
 
   S.head = head;
   S.title = title;
-  S.back = back;
+  S.collapse = collapse;
   S.add = add;
   S.list = list;
   S.empty = empty;
@@ -638,23 +650,22 @@ async function retryRead() {
 
 /**
  * The column could not be read, and the permission is still granted. The heading is
- * painted anyway, so `back` and the add button are in the state the folder deserves
+ * painted anyway, so the collapse and add buttons are in the state the tree deserves
  * rather than the state a half-built frame left them in.
  */
 function showReadError() {
   if (S.phase !== 'list') return;
   disconnectObserver();
   if (S.list) S.list.textContent = '';
-  S.nodes = [];
+  S.rows = [];
   S.rendered = 0;
-  S.painted = '';
   if (S.more) {
     S.more.hidden = true;
     S.more.textContent = '';
   }
   if (S.empty) S.empty.hidden = true;
   if (S.error) S.error.hidden = false;
-  paintHeader(S.folderId);
+  paintHeader();
 }
 
 /**
@@ -671,63 +682,70 @@ function glyph(href, className) {
   return svg;
 }
 
-/* ── Painting one folder ─────────────────────────────────────────────────── */
+/* ── Painting the open tree ─────────────────────────────────────────────────── */
 
 /**
- * Re-read the folder on screen and redraw it. Nothing but that folder is ever read.
+ * Re-read the open tree and redraw it. The roots, plus the children of every folder
+ * that is open — nothing else is read, and `getTree()` is never called.
  * @returns {Promise<void>}
  */
 async function paint() {
   if (S.phase !== 'list' || !S.list || !S.rail) return;
   const token = (S.paintToken += 1);
-  const folderId = S.folderId;
 
-  const kids = await bm('getChildren', folderId);
+  // The children this paint read, and nobody else's. It was module state once; two
+  // paints overlapping then wrote into one map, an older paint's pre-change read
+  // landed in the newer paint's map, and `loadExpanded`'s "already have it" check
+  // skipped the fresh read — so the column showed the old children and stayed wrong
+  // until something unrelated repainted it. Re-reading the open folders costs
+  // 0.6-1.5 ms each (probe-results.md); getting this wrong costs correctness.
+  /** @type {Map<string, any[]>} */
+  const kids = new Map();
+
+  const roots = await readFolder(ROOT_ID, kids, token);
   if (token !== S.paintToken || S.phase !== 'list' || !S.list) return;
-  if (!kids) {
-    // The folder is gone, or the call was refused. `bm()` has already decided which and
-    // shown the grant card if the permission went; from here the only useful move is up.
-    if (folderId !== ROOT_ID) {
-      S.folderId = ROOT_ID;
-      S.pathId = null;
-      await paint();
-      return;
-    }
-    // The roots themselves would not read, so there is nowhere above to fall back to.
+  if (!roots) {
+    // `bm()` has already decided whether the permission went and shown the grant card.
+    // The roots are the top, so there is nowhere to fall back to.
     showReadError();
     return;
   }
 
-  if (S.pathId !== folderId) {
-    S.path = await folderPath(folderId);
-    if (token !== S.paintToken || S.phase !== 'list' || !S.list) return;
-    S.pathId = folderId;
-  }
+  const gone = await loadExpanded(roots, kids, token);
+  if (token !== S.paintToken || S.phase !== 'list' || !S.list) return;
+  // A folder that stopped reading stops counting as open, or every later paint would
+  // try it again and the chevron would stay pointing down over nothing.
+  for (const id of gone) S.expanded.delete(id);
 
-  // What to put back afterwards: the row that had focus, how far the list had grown and
-  // where it was scrolled to. A repaint is usually an event about one bookmark, and
-  // losing your place over it is worse than the stale row would have been.
-  const sameFolder = folderId === S.painted;
-  const keepRendered = sameFolder ? S.rendered : 0;
-  const keepScroll = sameFolder ? S.rail.scrollTop : 0;
+  // What to put back: how far the list had grown, where it was scrolled, and which row
+  // had focus. A repaint is usually one bookmark changing somewhere, and losing your
+  // place over it is worse than the stale row would have been.
+  const keepRendered = S.rendered;
+  const keepScroll = S.rail.scrollTop;
   const active = document.activeElement;
-  const keepFocus = sameFolder && active instanceof HTMLElement && S.list.contains(active)
+  const keepFocus = active instanceof HTMLElement && S.list.contains(active)
     ? active.dataset.bookmarkId || null
     : null;
 
-  S.painted = folderId;
-  S.nodes = kids;
+  S.rows = flatten(roots, kids);
+  // Closing a folder can hide the one the bookmark button was aimed at, which stays
+  // open inside it. Keeping a target nobody can see would disable the button with no
+  // visible reason; forgetting it puts the button back in its plain "open a folder
+  // first" state, which says what to do.
+  if (S.addTarget && !addTargetRow()) {
+    S.addTarget = '';
+    saveView();
+  }
   S.rendered = 0;
   S.list.textContent = '';
-  S.list.setAttribute('aria-label', headingFor(folderId));
-  if (S.empty) S.empty.hidden = kids.length > 0;
+  if (S.empty) S.empty.hidden = S.rows.length > 0;
   if (S.error) S.error.hidden = true;
 
   do {
     renderChunk();
-  } while (S.rendered < keepRendered && S.rendered < S.nodes.length);
+  } while (S.rendered < keepRendered && S.rendered < S.rows.length);
 
-  paintHeader(folderId);
+  paintHeader();
 
   const scroll = S.pendingScroll || keepScroll;
   S.pendingScroll = 0;
@@ -739,47 +757,126 @@ async function paint() {
   }
 }
 
-/** @param {string} folderId */
-function paintHeader(folderId) {
-  if (!S.title || !S.back || !S.add) return;
-  const atRoot = folderId === ROOT_ID;
-  S.title.textContent = headingFor(folderId);
-  // The name is ellipsized to fit; the whole path is one hover away.
-  S.title.title = atRoot ? t('bookmarks') : S.path.join(' / ');
-  S.back.hidden = atRoot;
-  // Chrome refuses to create anything directly under the root, so the button says so
-  // instead of failing when it is pressed.
-  S.add.disabled = atRoot;
-}
-
 /**
- * The folder's own name — the last step of the path, not the path split on a separator:
- * a folder is free to be called "Work / Archive" and that must not read as two levels.
- * @param {string} folderId
- */
-function headingFor(folderId) {
-  if (folderId === ROOT_ID || S.path.length === 0) return t('bookmarks');
-  return S.path[S.path.length - 1] || t('bookmarks');
-}
-
-/**
- * The breadcrumb, built by walking up with `get(parentId)` — measured at ~1 ms a level.
- * The tree is never read to find it.
+ * `getChildren`, remembered in the map belonging to the paint that asked.
  *
- * @param {string} folderId
- * @returns {Promise<string[]>} the names from the root down, this folder last
+ * The token is checked AFTER the await and before the write: a paint that has been
+ * superseded must not put its result anywhere, because `paint()`'s own token checks
+ * guard the DOM and not the state read on the way to it.
+ *
+ * @param {string} id
+ * @param {Map<string, any[]>} kids this paint's map
+ * @param {number} token this paint's `paintToken`
+ * @returns {Promise<any[]|null>} null when the read failed or the paint was superseded
  */
-async function folderPath(folderId) {
-  const parts = [];
-  let id = folderId;
-  for (let hop = 0; hop < 32 && id && id !== ROOT_ID; hop += 1) {
-    const got = await bm('get', id);
-    const node = Array.isArray(got) ? got[0] : null;
-    if (!node) break;
-    parts.unshift(node.title || '');
-    id = node.parentId ? String(node.parentId) : '';
+async function readFolder(id, kids, token) {
+  const got = await bm('getChildren', id);
+  if (token !== S.paintToken || !got) return null;
+  kids.set(id, got);
+  return got;
+}
+
+/**
+ * Read the children of every folder that is open, breadth-first from the roots, so that
+ * `flatten()` can be synchronous. Only open folders are read: a collapsed one is a
+ * single row and its contents are nobody's business until it is opened.
+ *
+ * @param {any[]} roots
+ * @param {Map<string, any[]>} kids this paint's map
+ * @param {number} token this paint's `paintToken`
+ * @returns {Promise<string[]>} ids to stop treating as open: ones that would not read,
+ *   and ones the read budget did not reach
+ */
+async function loadExpanded(roots, kids, token) {
+  /** @type {string[]} */
+  const gone = [];
+  const queue = roots.filter(isFolder).map((node) => String(node.id));
+  let reads = 0;
+  while (queue.length) {
+    const id = /** @type {string} */ (queue.shift());
+    if (!S.expanded.has(id) || kids.has(id)) continue;
+    // Superseded, or the document is going: stop spending `chrome.bookmarks` calls on
+    // a result nobody will use. Without this the loop ran its whole budget after
+    // `destroy()`, and every failing call took the lost-permission path with it.
+    if (token !== S.paintToken || S.dead || S.phase !== 'list') return gone;
+    if (reads >= MAX_TREE_READS) {
+      // Out of budget. Marking the rest closed is the honest outcome: left open they
+      // would render an open twisty over nothing, never be read (so never land in
+      // `gone`), and make every later paint spend the same budget on the same folders.
+      gone.push(id);
+      continue;
+    }
+    reads += 1;
+    const got = await readFolder(id, kids, token);
+    if (!got) {
+      gone.push(id);
+      continue;
+    }
+    for (const child of got) if (isFolder(child)) queue.push(String(child.id));
   }
-  return parts;
+  return gone;
+}
+
+/**
+ * The open tree as one array, in the order it is read down the column. `bar` is the
+ * index of the root every row descends from, which is what the stripe colours by.
+ *
+ * @param {any[]} roots
+ * @param {Map<string, any[]>} kids this paint's map
+ * @returns {Array<{node: any, depth: number, bar: number, empty?: boolean}>}
+ */
+function flatten(roots, kids) {
+  /** @type {Array<{node: any, depth: number, bar: number, empty?: boolean}>} */
+  const out = [];
+
+  /** @param {any} node @param {number} depth @param {number} bar */
+  const push = (node, depth, bar) => {
+    if (out.length >= MAX_TREE_ROWS) return;
+    out.push({ node, depth, bar });
+    if (!isFolder(node) || !S.expanded.has(String(node.id))) return;
+    const children = kids.get(String(node.id));
+    if (!children) return;
+    if (children.length === 0) {
+      // An open folder with nothing in it has to say so. Rendering nothing makes it
+      // look identical to one whose read failed, and the drill-down it replaced did
+      // say "Empty" — dropping that was a regression, not a simplification.
+      out.push({ node, depth: depth + 1, bar, empty: true });
+      return;
+    }
+    for (const child of children) push(child, depth + 1, bar);
+  };
+
+  roots.forEach((root, index) => push(root, 0, index % BAR_COLOURS));
+  return out;
+}
+
+/** The heading never changes now that nothing navigates away from it. */
+function paintHeader() {
+  if (!S.title || !S.collapse || !S.add) return;
+  S.title.textContent = t('bookmarks');
+  S.title.title = t('bookmarks');
+  S.collapse.hidden = S.expanded.size === 0;
+
+  const target = addTargetRow();
+  S.add.disabled = !target;
+  const label = target
+    ? t('bookmarksAddTo', [target.node.title || ''])
+    : t('bookmarksAddCurrentTab');
+  S.add.setAttribute('aria-label', label);
+  S.add.title = label;
+}
+
+/**
+ * Where the bookmark button writes: the folder opened most recently, which is the one
+ * the reader is looking into. Chrome refuses to create anything directly under the
+ * root, so a root is never the answer — but a root's own row is, once it is open.
+ * @returns {{node: any, depth: number, bar: number}|null}
+ */
+function addTargetRow() {
+  if (!S.addTarget || !S.expanded.has(S.addTarget)) return null;
+  return S.rows.find(
+    (row) => !row.empty && String(row.node.id) === S.addTarget && isFolder(row.node),
+  ) || null;
 }
 
 /* ── Rows, in chunks ─────────────────────────────────────────────────────── */
@@ -788,13 +885,13 @@ async function folderPath(folderId) {
 function renderChunk() {
   if (!S.list || !S.more) return;
   const open = openTabIndex();
-  const end = Math.min(S.nodes.length, S.rendered + CHUNK);
+  const end = Math.min(S.rows.length, S.rendered + CHUNK);
   const frag = document.createDocumentFragment();
-  for (let i = S.rendered; i < end; i += 1) frag.append(buildRow(S.nodes[i], open));
+  for (let i = S.rendered; i < end; i += 1) frag.append(buildEntry(S.rows[i], open));
   S.list.append(frag);
   S.rendered = end;
 
-  const remaining = S.nodes.length - S.rendered;
+  const remaining = S.rows.length - S.rendered;
   if (remaining > 0) {
     S.more.hidden = false;
     S.more.textContent = t('bookmarksMore', [String(remaining)]);
@@ -840,35 +937,74 @@ function disconnectObserver() {
 function onSentinel(entries) {
   if (S.phase !== 'list') return;
   if (!entries.some((entry) => entry.isIntersecting)) return;
-  if (S.rendered >= S.nodes.length) return;
+  if (S.rendered >= S.rows.length) return;
   renderChunk();
 }
 
+/** @param {{node: any, depth: number, bar: number, empty?: boolean}} entry */
+function buildEntry(entry, open) {
+  return entry.empty ? buildEmptyMarker(entry) : buildRow(entry, open);
+}
+
 /**
- * @param {any} node
- * @param {Map<string, number>} open urlKey → the tab id already showing that page
+ * The "nothing in here" line under an open, empty folder. A plain element, not a
+ * `treeitem`: there is nothing to focus, to open or to count, and the arrow keys step
+ * straight over it. Rendering nothing at all — which is what the first pass did — made
+ * an empty folder look exactly like one whose read had failed.
+ *
+ * @param {{depth: number, bar: number}} entry
+ * @returns {HTMLElement}
  */
-function buildRow(node, open) {
+function buildEmptyMarker(entry) {
+  const line = document.createElement('div');
+  line.className = 'w-muted bmk-empty-row';
+  line.dataset.testid = 'bookmark-folder-empty';
+  line.dataset.bar = String(entry.bar);
+  line.style.setProperty('--bmk-depth', String(Math.min(entry.depth, MAX_INDENT_LEVELS)));
+  line.textContent = t('bookmarksEmpty');
+  return line;
+}
+
+/**
+ * @param {{node: any, depth: number, bar: number}} entry
+ * @param {Map<string, number>} open urlKey → the tab id already showing that page
+ * @returns {HTMLElement}
+ */
+function buildRow(entry, open) {
+  const { node, depth, bar } = entry;
   const folder = isFolder(node);
   const row = document.createElement('button');
   row.type = 'button';
   row.className = 'w-row bmk-row';
   row.dataset.testid = 'bookmark-row';
+  row.dataset.depth = String(depth);
+  // Which of the root folders this row lives under. Two accounts synced into one
+  // profile put two folders called "Bookmarks bar" side by side, and the stripe is
+  // what tells one from the other.
+  row.dataset.bar = String(bar);
+  // Indentation stops at MAX_INDENT_LEVELS; past that the row would have no width left.
+  row.style.setProperty('--bmk-depth', String(Math.min(depth, MAX_INDENT_LEVELS)));
   // NOT `data-tab-id`. That attribute means "this element IS the card for that tab" and
   // has exactly one owner; a second element carrying it made every `[data-tab-id]`
   // lookup in the panel match two nodes once already (22-widgets.spec.js).
   row.dataset.bookmarkId = String(node.id);
   row.dataset.kind = folder ? 'folder' : 'link';
-  row.setAttribute('role', 'option');
-  row.setAttribute('aria-selected', 'false');
+  // A tree, not a list: the level and the open state are what a screen reader needs to
+  // say where a row sits, and neither exists on `option`.
+  row.setAttribute('role', 'treeitem');
+  row.setAttribute('aria-level', String(depth + 1));
   row.tabIndex = -1;
 
   const aside = document.createElement('span');
   aside.className = 'w-row__aside';
 
   if (folder) {
+    const isOpen = S.expanded.has(String(node.id));
+    row.setAttribute('aria-expanded', String(isOpen));
+    // The twisty leads the row, where a tree puts it; the chevron rotates rather than
+    // swapping glyphs, so there is one symbol to recognise instead of two.
+    row.append(glyph('i-chevron', 'icon bmk-row__twisty'));
     row.append(glyph('i-folder', 'icon bmk-row__glyph'));
-    aside.append(glyph('i-chevron', 'icon bmk-row__chevron'));
     row.title = node.title || '';
   } else {
     // In-process: `chrome-extension://<id>/_favicon/` answers from the profile's own
@@ -964,25 +1100,56 @@ function markOpenTabs() {
  * @param {string} id
  * @returns {Promise<void>}
  */
-async function openFolder(id) {
-  if (!id || S.phase !== 'list' || !S.rail) return;
-  const hadFocus = S.rail.contains(document.activeElement);
-  S.folderId = String(id);
-  S.pathId = null;
-  S.pendingScroll = 0;
-  S.rail.scrollTop = 0;
-  S.painted = '';
+async function toggleFolder(id) {
+  if (!id || S.phase !== 'list') return;
+  if (S.expanded.has(id)) {
+    S.expanded.delete(id);
+    // Closing the folder withdraws the offer to write into it. Without this the
+    // bookmark button kept aiming at a folder the reader had just shut — its row is
+    // still on screen and still a folder, so looking the row up cannot tell.
+    if (S.addTarget === id) S.addTarget = '';
+  } else {
+    S.expanded.add(id);
+    // Opening a folder is also how you choose where the bookmark button writes. It is
+    // the folder you are looking into, which is the only answer that needs no second
+    // control to express.
+    S.addTarget = id;
+  }
+  saveView();
+  await paint();
+}
+
+/** Everything shut, back to the roots. The only way out of a deep tree in one press. */
+async function collapseAll() {
+  if (S.phase !== 'list' || S.expanded.size === 0) return;
+  // The button hides itself at the end of the repaint below — `paintHeader()` hides it
+  // once nothing is open — so focus has to be handed somewhere first, or it falls to
+  // <body> and the arrow keys stop working until a row is clicked.
+  const hadFocus = !!S.rail && S.rail.contains(document.activeElement);
+  S.expanded.clear();
+  S.addTarget = '';
+  if (S.rail) S.rail.scrollTop = 0;
   saveView();
   await paint();
   if (hadFocus) focusFirstRow();
 }
 
-/** Up one level; the root's children are the roots themselves. */
-async function goUp() {
-  if (S.folderId === ROOT_ID) return;
-  const got = await bm('get', S.folderId);
-  const node = Array.isArray(got) ? got[0] : null;
-  await openFolder(node && node.parentId ? String(node.parentId) : ROOT_ID);
+/**
+ * The row for the folder `row` sits inside, or null at the top level. Found by walking
+ * back up the rendered rows to the first one a level shallower — the DOM is flat, so
+ * this is what "my parent" means on screen.
+ * @param {HTMLElement} row
+ * @returns {HTMLElement|null}
+ */
+function parentRow(row) {
+  const depth = Number(row.dataset.depth || '0');
+  if (!depth || !S.list) return null;
+  let cursor = row.previousElementSibling;
+  while (cursor instanceof HTMLElement) {
+    if (Number(cursor.dataset.depth || '0') < depth) return cursor;
+    cursor = cursor.previousElementSibling;
+  }
+  return null;
 }
 
 /* ── Opening ─────────────────────────────────────────────────────────────── */
@@ -1024,7 +1191,15 @@ async function openBookmark(row, background) {
  * @returns {Promise<void>}
  */
 async function addCurrentTab() {
-  if (S.phase !== 'list' || S.folderId === ROOT_ID) return;
+  if (S.phase !== 'list') return;
+  const target = addTargetRow();
+  if (!target) {
+    // Nothing is open, so there is no folder the reader could be said to be looking
+    // into. `paintHeader()` disables the button for that state, but only on the paint
+    // AFTER the folder closed — a bookmark event landing in between reaches here.
+    toast(t('bookmarksAddNoFolder'));
+    return;
+  }
   const model = S.ctx && typeof S.ctx.model === 'function' ? S.ctx.model() : null;
   const tab = model && model.tabs && model.activeTabId != null
     ? model.tabs.get(model.activeTabId)
@@ -1034,12 +1209,12 @@ async function addCurrentTab() {
     toast(t('operationFailed'));
     return;
   }
-  const made = await bm('create', { parentId: S.folderId, title: tab.title || url, url });
+  const made = await bm('create', { parentId: S.addTarget, title: tab.title || url, url });
   if (!made) {
     toast(t('operationFailed'));
     return;
   }
-  toast(t('bookmarksAdded'));
+  toast(t('bookmarksAddedTo', [target.node.title || '']));
 }
 
 /* ── Pointer ─────────────────────────────────────────────────────────────── */
@@ -1051,7 +1226,7 @@ function onListClick(event) {
   event.preventDefault();
   focusRow(row);
   if (row.dataset.kind === 'folder') {
-    void openFolder(row.dataset.bookmarkId || '');
+    void toggleFolder(row.dataset.bookmarkId || '');
     return;
   }
   void openBookmark(row, event.ctrlKey || event.metaKey);
@@ -1104,23 +1279,41 @@ function onListKeyDown(event) {
       if (next) focusRow(next);
       return;
     }
-    // Left, Backspace and Alt+Left all mean "back" — the last is what a browser has
-    // trained the hand to reach for, and it arrives here as a plain ArrowLeft.
+    // The tree conventions, which are also what a browser has trained the hand for:
+    // Left closes the folder you are in or steps out to the one containing it, Right
+    // opens the folder you are on or steps into it.
     case 'ArrowLeft':
-    case 'Backspace':
+    case 'Backspace': {
       event.preventDefault();
-      void goUp();
+      const id = row.dataset.bookmarkId || '';
+      if (row.dataset.kind === 'folder' && S.expanded.has(id)) {
+        void toggleFolder(id);
+        return;
+      }
+      const up = parentRow(row);
+      if (up) focusRow(up);
       return;
-    case 'ArrowRight':
+    }
+    case 'ArrowRight': {
       if (row.dataset.kind !== 'folder') return;
       event.preventDefault();
-      void openFolder(row.dataset.bookmarkId || '');
+      const id = row.dataset.bookmarkId || '';
+      if (!S.expanded.has(id)) {
+        void toggleFolder(id);
+        return;
+      }
+      // Already open: the next row down is its first child, if it has one.
+      const next = rows[index + 1];
+      if (next && Number(next.dataset.depth || '0') > Number(row.dataset.depth || '0')) {
+        focusRow(next);
+      }
       return;
+    }
     case 'Enter':
       // On a <button> Enter would also fire a click; preventing the default keeps the
       // action from running twice.
       event.preventDefault();
-      if (row.dataset.kind === 'folder') void openFolder(row.dataset.bookmarkId || '');
+      if (row.dataset.kind === 'folder') void toggleFolder(row.dataset.bookmarkId || '');
       else void openBookmark(row, false);
       return;
     default:
@@ -1179,7 +1372,11 @@ function flushView() {
 }
 
 function writeView() {
-  const value = { folderId: S.folderId, scrollTop: Math.round(S.rail ? S.rail.scrollTop : 0) };
+  const value = {
+    expanded: [...S.expanded],
+    addTarget: S.addTarget,
+    scrollTop: Math.round(S.rail ? S.rail.scrollTop : 0),
+  };
   try {
     void Promise.resolve(chrome.storage.session.set({ [STORAGE_SESSION.bookmarkView]: value }))
       .catch((e) => log.warn('bookmarks view save', e));
@@ -1198,28 +1395,23 @@ async function restoreView() {
     log.warn('bookmarks view load', e);
   }
 
-  const wanted = stored && typeof stored.folderId === 'string' ? stored.folderId : '';
-  S.pendingScroll = stored && Number.isFinite(stored.scrollTop) ? Math.max(0, stored.scrollTop) : 0;
-  S.painted = '';
-
-  if (wanted === ROOT_ID) {
-    S.folderId = ROOT_ID;
-    S.pathId = null;
-    return;
-  }
-  if (wanted) {
-    // The folder may have been deleted since; a stale id must not leave an empty column.
-    const got = await bm('get', wanted);
-    const node = Array.isArray(got) ? got[0] : null;
-    if (isFolder(node)) {
-      S.folderId = wanted;
-      S.pathId = null;
-      return;
-    }
-  }
-  S.folderId = await bookmarksBarId();
-  S.pathId = null;
+  S.expanded = new Set();
+  S.addTarget = '';
   S.pendingScroll = 0;
+  if (!stored) return;
+
+  // Ids only, and a bounded number of them: this is session storage the panel wrote,
+  // but a paint that walked a malformed list would be reading Chrome for every entry.
+  const open = Array.isArray(stored.expanded) ? stored.expanded : [];
+  for (const id of open.slice(0, MAX_TREE_READS)) {
+    if (typeof id === 'string' && id && id !== ROOT_ID) S.expanded.add(id);
+  }
+  // A folder that has been deleted since simply will not read, and `paint()` drops it
+  // from the open set on the way through — so there is nothing to verify here.
+  if (typeof stored.addTarget === 'string' && S.expanded.has(stored.addTarget)) {
+    S.addTarget = stored.addTarget;
+  }
+  if (Number.isFinite(stored.scrollTop)) S.pendingScroll = Math.max(0, stored.scrollTop);
 }
 
 /* ── Chrome's bookmark events, all of them in the panel ──────────────────── */
@@ -1227,42 +1419,50 @@ async function restoreView() {
 function bindBookmarkEvents() {
   if (S.bound.length) return;
 
-  /** @param {unknown} parentId */
-  const touchesFolder = (parentId) => parentId != null && String(parentId) === S.folderId;
-  /** @param {unknown} id */
-  const touchesRow = (id) => S.nodes.some((node) => String(node.id) === String(id));
+  /**
+   * Whether a change under `parentId` is on screen. The roots always are; anything else
+   * is only if that folder is open. A collapsed folder's contents are not rendered, so
+   * a bookmark appearing inside one changes nothing the reader can see.
+   * @param {unknown} parentId
+   */
+  const onScreen = (parentId) => {
+    if (parentId == null) return false;
+    const id = String(parentId);
+    return id === ROOT_ID || S.expanded.has(id);
+  };
+  /** @param {unknown} id whether the row itself is rendered */
+  const touchesRow = (id) => S.rows.some((row) => String(row.node.id) === String(id));
 
   /** @type {Array<[any, Function]>} */
   const wanted = [];
   try {
     wanted.push(
       [chrome.bookmarks.onCreated, (id, node) => {
-        if (touchesFolder(node && node.parentId)) scheduleRepaint();
+        if (onScreen(node && node.parentId)) scheduleRepaint();
       }],
       [chrome.bookmarks.onChanged, (id) => {
-        if (String(id) === S.folderId) S.pathId = null; // the header's own name changed
-        if (String(id) === S.folderId || touchesRow(id)) scheduleRepaint();
+        if (touchesRow(id)) scheduleRepaint();
       }],
       [chrome.bookmarks.onMoved, (id, info) => {
-        if (touchesFolder(info && info.parentId) || touchesFolder(info && info.oldParentId)) {
+        if (onScreen(info && info.parentId) || onScreen(info && info.oldParentId)) {
           scheduleRepaint();
         }
       }],
       [chrome.bookmarks.onRemoved, (id, info) => {
-        // The folder being READ was the one deleted: there is nothing to repaint, so go
-        // up to where it used to be.
-        if (String(id) === S.folderId) {
-          S.folderId = info && info.parentId ? String(info.parentId) : ROOT_ID;
-          S.pathId = null;
-          S.painted = '';
+        // A folder that was open has gone. Forgetting it here keeps the open set from
+        // collecting ids that will never read again; `paint()` would drop it too, but
+        // only after spending a `getChildren` on it every time.
+        const gone = String(id);
+        if (S.expanded.delete(gone)) {
+          if (S.addTarget === gone) S.addTarget = '';
           saveView();
           scheduleRepaint();
           return;
         }
-        if (touchesFolder(info && info.parentId) || touchesRow(id)) scheduleRepaint();
+        if (onScreen(info && info.parentId) || touchesRow(id)) scheduleRepaint();
       }],
       [chrome.bookmarks.onChildrenReordered, (id) => {
-        if (touchesFolder(id)) scheduleRepaint();
+        if (onScreen(id)) scheduleRepaint();
       }],
     );
   } catch (e) {

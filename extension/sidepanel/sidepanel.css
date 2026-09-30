@@ -94,6 +94,18 @@
   --vt-card-min: 96px;
   /* Width of the widget rail when it is shown. */
   --vt-rail-width: 184px;
+
+  /* One colour per root bookmark folder, cycled. A profile signed into two accounts
+     shows two folders called "Bookmarks bar" and two called "Other bookmarks" under
+     the root, so the name cannot say which is which — the stripe down the left edge
+     can, and it also groups a long open tree back to the bar it came from. Chrome's
+     own tab-group hues, so nothing new has to be invented for dark. */
+  --vt-bar-0: #8ab4f8;
+  --vt-bar-1: #81c995;
+  --vt-bar-2: #fdd663;
+  --vt-bar-3: #d7aefb;
+  --vt-bar-4: #78d9ec;
+  --vt-bar-5: #f28b82;
   /* The width the user asked each card to be. Unset = fill the column, which is
      the default and lets `--vt-columns` decide the count. render.js sets it to the
      chosen pixel width, and the rule below then packs as many cards of that size
@@ -169,6 +181,12 @@
     --vt-group-purple: #9D39F3;
     --vt-group-cyan: #007B83;
     --vt-group-orange: #FF9436;
+    --vt-bar-0: #1a73e8;
+    --vt-bar-1: #1e8e3e;
+    --vt-bar-2: #b06000;
+    --vt-bar-3: #8430ce;
+    --vt-bar-4: #00707a;
+    --vt-bar-5: #c5221f;
   }
 }
 
@@ -211,11 +229,23 @@
   --vt-group-purple: #9D39F3;
   --vt-group-cyan: #007B83;
   --vt-group-orange: #FF9436;
+  --vt-bar-0: #1a73e8;
+  --vt-bar-1: #1e8e3e;
+  --vt-bar-2: #b06000;
+  --vt-bar-3: #8430ce;
+  --vt-bar-4: #00707a;
+  --vt-bar-5: #c5221f;
 }
 
 /* An explicit dark choice must win over `prefers-color-scheme: light`. */
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --vt-bar-0: #8ab4f8;
+  --vt-bar-1: #81c995;
+  --vt-bar-2: #fdd663;
+  --vt-bar-3: #d7aefb;
+  --vt-bar-4: #78d9ec;
+  --vt-bar-5: #f28b82;
   --vt-bg: #2a2a2a;
   --vt-card: #333333;
   --vt-card-hover: #3b3b3b;
@@ -1971,12 +2001,12 @@ body:has(#tool-strip:not([hidden])) .toast {
 }
 
 /* ── The bookmark column (bookmarks.js) ──────────────────────────────────────
-   176 px of usable width, so the layout is a DRILL-DOWN: one folder at a time under a
-   sticky header, never an indented tree. Rows reuse `.w-rows` / `.w-row` wholesale, so
-   hover, focus-visible and the accent rule are the ones the tools column already has —
-   the only things added here are the icon column, the folder chevron and the dot that
-   says "this page is already open". Every colour is a token, so light and dark come
-   from the same definitions as everything else. */
+   176 px of usable width, so the tree is drawn rather than nested: one flat list of
+   buttons carrying `aria-level`, indentation as padding that stops after five
+   levels, and a stripe pinned to x=0 so one root reads as one line down the edge.
+   It replaced a drill-down, which fitted the width but hid every other folder the
+   moment you opened one.
+*/
 .bmk { display: flex; flex-direction: column; min-width: 0; }
 
 .bmk__head {
@@ -1995,9 +2025,9 @@ body:has(#tool-strip:not([hidden])) .toast {
 .bmk__head .iconbtn:disabled { opacity: .4; cursor: default; }
 .bmk__head .iconbtn:disabled:hover { background: transparent; color: var(--vt-text-muted); }
 
-/* The sprite's chevron points right, which is what a folder row needs; "up one folder"
-   is the same glyph turned round rather than a tenth symbol in the sheet. */
-.bmk__back .icon { transform: rotate(180deg); }
+/* The sprite's chevron points right, which is what a closed folder row needs; the
+   header's "close every folder" is the same glyph turned a quarter turn rather than a
+   tenth symbol in the sheet, and an open row turns it the other quarter. */
 
 .bmk__title {
   flex: 1 1 auto;
@@ -2028,7 +2058,59 @@ body:has(#tool-strip:not([hidden])) .toast {
 .bmk__error-text { margin: 0; line-height: 1.45; }
 
 /* `.w-row` aligns on the baseline, which a 16 px favicon does not share. */
-.bmk-row { align-items: center; }
+/* ── The tree ──────────────────────────────────────────────────────────────
+   One flat list of buttons; the nesting is drawn, not nested. Indentation is a
+   padding on the row, so the bar stripe stays pinned to x=0 at every depth and the
+   rows under one bar read as a single continuous line down the edge. */
+.bmk-row {
+  align-items: center;
+  position: relative;
+  /* 5px is `.w-row`'s own padding; 5px more clears the stripe. */
+  padding-left: calc(10px + var(--bmk-depth, 0) * 9px);
+  box-shadow: inset 3px 0 0 var(--bmk-bar, transparent);
+}
+.bmk-empty-row {
+  padding: 3px 5px 3px calc(10px + var(--bmk-depth, 0) * 9px);
+  font-size: 10.5px;
+  font-style: italic;
+  box-shadow: inset 3px 0 0 var(--bmk-bar, transparent);
+}
+.bmk-empty-row[data-bar="0"] { --bmk-bar: var(--vt-bar-0); }
+.bmk-empty-row[data-bar="1"] { --bmk-bar: var(--vt-bar-1); }
+.bmk-empty-row[data-bar="2"] { --bmk-bar: var(--vt-bar-2); }
+.bmk-empty-row[data-bar="3"] { --bmk-bar: var(--vt-bar-3); }
+.bmk-empty-row[data-bar="4"] { --bmk-bar: var(--vt-bar-4); }
+.bmk-empty-row[data-bar="5"] { --bmk-bar: var(--vt-bar-5); }
+
+.bmk-row[data-bar="0"] { --bmk-bar: var(--vt-bar-0); }
+.bmk-row[data-bar="1"] { --bmk-bar: var(--vt-bar-1); }
+.bmk-row[data-bar="2"] { --bmk-bar: var(--vt-bar-2); }
+.bmk-row[data-bar="3"] { --bmk-bar: var(--vt-bar-3); }
+.bmk-row[data-bar="4"] { --bmk-bar: var(--vt-bar-4); }
+.bmk-row[data-bar="5"] { --bmk-bar: var(--vt-bar-5); }
+
+/* The bars themselves carry the name you are looking for, so they are the loudest
+   thing in the column; depth 2 and below step down once and then stop, because
+   11 px is already small and a scale that kept shrinking would end unreadable. */
+.bmk-row[data-depth="0"] { font-size: 11.5px; font-weight: 600; padding-top: 5px; padding-bottom: 5px; }
+.bmk-row[data-depth="0"] + .bmk-row[data-depth="0"] { margin-top: 2px; }
+.bmk-row:not([data-depth="0"]):not([data-depth="1"]) { font-size: 10.5px; }
+
+/* Collapsed points along the row, open points into it. One glyph, rotated, rather
+   than two the eye has to tell apart. */
+.icon.bmk-row__twisty {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  opacity: .6;
+  transition: transform .12s ease;
+}
+.bmk-row[aria-expanded="true"] .bmk-row__twisty { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .icon.bmk-row__twisty { transition: none; }
+}
+
+.bmk__collapse .icon { transform: rotate(-90deg); }
 
 .bmk-row__icon {
   flex: none;
@@ -2043,7 +2125,6 @@ body:has(#tool-strip:not([hidden])) .toast {
   color: var(--vt-text-muted);
 }
 
-.icon.bmk-row__chevron { width: 11px; height: 11px; opacity: .55; }
 
 .bmk-row .w-row__aside { display: inline-flex; align-items: center; gap: 4px; }
 

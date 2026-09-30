@@ -65,9 +65,13 @@ with **Load unpacked**.
   links in a window of its own, and a **notes** pad that survives a restart. Pick which ones you want in Settings; the order
   you tick them is the order they stack, and unticking them all hides the column. None of
   them uses the network or needs a permission the previews did not already require.
-- **Or bookmarks in that same column**: switch the column from tools to bookmarks and it
-  becomes your own folders, one level at a time — click a row to open it, a dot marks
-  anything already open in a tab, and one button bookmarks the tab you are on. This is the
+- **Or bookmarks in that same column**: switch the column from tools to bookmarks — one
+  press of the button beside the gear — and it becomes your own folders as a tree. Your
+  bookmark bars are what you see first; clicking one opens it in place, indented beneath
+  itself, with everything else still on screen, and each bar's rows carry a stripe in its
+  own colour so two folders with the same name are still told apart. A dot marks anything
+  already open in a tab, and clicking that row goes to the tab instead of opening a second
+  copy. One button bookmarks the tab you are on, into the folder you have open. This is the
   one feature that does ask for a permission the previews did not already require, and it
   asks the first time you switch to it, never at install: `bookmarks` is declared in
   `optional_permissions`. Apart from that one button it is read-only — no renaming, no

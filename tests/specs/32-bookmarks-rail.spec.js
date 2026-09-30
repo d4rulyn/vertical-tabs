@@ -278,6 +278,59 @@ test('the mode switch flips the column both ways and the tools come back', async
   expect(again.settingsWidgets, 'nothing rewrote the ticked tools').toEqual(mine);
 });
 
+test('the topbar button switches the column both ways, from either side', async ({
+  harness, serviceWorker,
+}) => {
+  test.setTimeout(180_000);
+  const { panel } = harness;
+  await panel.setViewportSize({ width: 460, height: 900 });
+  /* The drawer's select is the complete way to set this, and it is two levels down a
+   * panel of settings. The first person to use the feature could not find it, so the
+   * switch also lives in the topbar where it is always one press — and, unlike the
+   * strip's own toggle, it is there in TOOLS mode too, which is the direction that had
+   * no in-panel way in at all. */
+  await setSettings(serviceWorker, { refreshInterval: 'off' });
+
+  const button = panel.locator('[data-testid="rail-mode-button"]');
+  await expect(button).toBeVisible({ timeout: 20_000 });
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+  expect(
+    await button.getAttribute('title'),
+    'the label says what pressing it does, not which half it is on',
+  ).toBe('Show bookmarks instead');
+
+  await button.click();
+  await expect.poll(async () => (await columnState(panel)).railMode, { timeout: 10_000 })
+    .toBe('bookmarks');
+  const shown = await columnState(panel);
+  expect(shown.bookmarkRailHidden).toBe(false);
+  expect(shown.stripHidden, 'and the tools moved to the strip').toBe(false);
+  expect(shown.widgetRailHidden).toBe(true);
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  expect(await button.getAttribute('title')).toBe('Show tools instead');
+
+  // Back again, and the tools are exactly the ones that were ticked before.
+  await button.click();
+  await expect.poll(async () => (await columnState(panel)).railMode, { timeout: 10_000 })
+    .toBe('tools');
+  const back = await columnState(panel);
+  expect(back.widgetRailHidden).toBe(false);
+  expect(back.bookmarkRailHidden).toBe(true);
+  expect(back.stripHidden).toBe(true);
+  expect(back.widgets).toEqual(shown.settingsWidgets);
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+
+  // The drawer and the button are the same setting. Asserted while the setting is
+  // BOOKMARKS: `tools` is the default, so reading it there would pass even if the
+  // drawer never saw the button at all.
+  await button.click();
+  await expect.poll(async () => (await columnState(panel)).railMode, { timeout: 10_000 })
+    .toBe('bookmarks');
+  await panel.locator('[data-testid="settings-button"]').click();
+  await expect(panel.locator('[data-testid="settings-view"]')).toBeVisible({ timeout: 10_000 });
+  await expect(panel.locator('[data-testid="settings-railMode"]')).toHaveValue('bookmarks');
+});
+
 test('with every tool unticked the strip is still the way back out of bookmarks', async ({
   harness, serviceWorker,
 }) => {
@@ -562,19 +615,35 @@ function rows(panel) {
       kind: el.dataset.kind,
       text: (el.querySelector('.w-row__main') || {}).textContent || '',
       open: el.dataset.openTab ? Number(el.dataset.openTab) : null,
+      depth: Number(el.dataset.depth),
+      bar: Number(el.dataset.bar),
+      expanded: el.getAttribute('aria-expanded'),
     })));
 }
 
-/** The header: the folder's own name, and the whole path behind it. */
+/**
+ * Click the first row whose main text contains `text`, case-insensitively — `hasText` is
+ * a substring match, not an exact one. The click waits for the row to be actionable, NOT
+ * for the repaint it starts, so every caller polls for what it expects afterwards.
+ */
+async function clickRow(panel, text) {
+  const row = panel.locator('[data-testid="bookmark-row"]', { hasText: text })
+    .filter({ has: panel.locator('.w-row__main', { hasText: text }) })
+    .first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.click();
+  return row;
+}
+
+/** The header: the column's name, and whether anything is open below it. */
 function header(panel) {
   return panel.evaluate(() => {
     const title = document.querySelector('[data-testid="bookmark-title"]');
-    const back = document.querySelector('[data-testid="bookmark-back"]');
+    const collapse = document.querySelector('[data-testid="bookmark-collapse"]');
     const list = document.querySelector('[data-testid="bookmark-list"]');
     return {
       name: title ? title.textContent : null,
-      path: title ? title.getAttribute('title') : null,
-      backHidden: back ? back.hidden : null,
+      collapseHidden: collapse ? collapse.hidden : null,
       listRole: list ? list.getAttribute('role') : null,
     };
   });
@@ -589,7 +658,7 @@ async function showBookmarks(panel, serviceWorker) {
   await expect(panel.locator('[data-testid="bookmark-grant"]')).toHaveCount(0);
 }
 
-granted('a folder opens, and every way back comes home again', async ({
+granted('a folder opens in place, and closing it puts the column back', async ({
   harness, serviceWorker,
 }) => {
   granted.setTimeout(180_000);
@@ -618,61 +687,118 @@ granted('a folder opens, and every way back comes home again', async ({
   ]);
   await showBookmarks(panel, serviceWorker);
 
-  // The bar, one level deep. A folder first, then a link — creation order, as Chrome
-  // returned it, not an order this file invented.
-  await expect.poll(() => rows(panel), { timeout: 15_000 })
-    .toMatchObject([{ kind: 'folder', text: 'Reading' }, { kind: 'link', text: 'Loose' }]);
+  // Everything shut. The roots are what a reader sees first — the bars themselves —
+  // and each is a folder. This is the shape the drill-down did NOT have: it opened
+  // inside the bar, so the other roots were off screen from the first frame.
+  await expect.poll(async () => (await rows(panel)).length, { timeout: 15_000 })
+    .toBeGreaterThan(0);
+  const shut = await rows(panel);
+  expect(shut.every((row) => row.kind === 'folder'), 'the roots are all folders').toBe(true);
+  expect(shut.every((row) => row.depth === 0), 'and nothing is nested yet').toBe(true);
+  expect(shut.every((row) => row.expanded === 'false'), 'and nothing is open').toBe(true);
+  expect(
+    new Set(shut.map((row) => row.bar)).size,
+    'each root gets its own stripe colour, which is what tells two "Bookmarks bar" apart',
+  ).toBe(shut.length);
 
-  const bar = await header(panel);
-  expect(bar.name).toBe('Bookmarks bar');
-  expect(bar.listRole, 'a flat list per level is a listbox, not a tree').toBe('listbox');
-  expect(bar.backHidden, 'the roots are one level above the bar, so back is live').toBe(false);
+  const top = await header(panel);
+  expect(top.name).toBe('Bookmarks');
+  expect(top.listRole, 'nesting drawn in one flat DOM is still a tree to a reader').toBe('tree');
+  expect(top.collapseHidden, 'nothing is open, so there is nothing to close').toBe(true);
   expect(
     await panel.evaluate(() => [...document.querySelectorAll('[data-testid="bookmark-row"]')]
-      .every((el) => el.getAttribute('role') === 'option')),
+      .every((el) => el.getAttribute('role') === 'treeitem' && el.getAttribute('aria-level') === '1')),
+  ).toBe(true);
+  expect(
+    await panel.locator('[data-testid="bookmark-add"]').isDisabled(),
+    'no folder is open, so there is nowhere for the tab to go',
   ).toBe(true);
 
-  // In with the mouse.
-  await panel.locator('[data-testid="bookmark-row"]').first().click();
-  await expect.poll(() => rows(panel), { timeout: 10_000 })
-    .toMatchObject([{ kind: 'link', text: 'One' }, { kind: 'link', text: 'Two' }]);
-  const inside = await header(panel);
-  expect(inside.name).toBe('Reading');
-  expect(inside.path, 'the breadcrumb is walked up with get(parentId), not read off a tree')
-    .toBe('Bookmarks bar / Reading');
+  // Open the bar. Its children appear UNDER it, indented — the other roots stay put.
+  await clickRow(panel, 'Bookmarks bar');
+  // The bar's own children, directly beneath it and one level in. How many roots this
+  // profile has is Chrome's business — what matters is that the rest of them are still
+  // on screen, still shut, which is exactly what the drill-down took away.
+  await expect.poll(async () => (await rows(panel)).slice(0, 3), { timeout: 10_000 })
+    .toMatchObject([
+      { kind: 'folder', text: 'Bookmarks bar', depth: 0, expanded: 'true' },
+      { kind: 'folder', text: 'Reading', depth: 1, expanded: 'false' },
+      { kind: 'link', text: 'Loose', depth: 1 },
+    ]);
+  const siblings = (await rows(panel)).slice(3);
+  expect(siblings.length, 'the other roots did not go anywhere').toBe(shut.length - 1);
+  expect(siblings.every((row) => row.depth === 0 && row.expanded === 'false')).toBe(true);
+  expect((await header(panel)).collapseHidden, 'something is open now').toBe(false);
 
-  // Out with the Left arrow.
-  await panel.keyboard.press('ArrowLeft');
-  await expect.poll(() => rows(panel), { timeout: 10_000 })
-    .toMatchObject([{ kind: 'folder', text: 'Reading' }, { kind: 'link', text: 'Loose' }]);
-  expect((await header(panel)).name).toBe('Bookmarks bar');
-
-  // In with the keyboard: focus is on the first row after coming back.
-  await panel.keyboard.press('ArrowRight');
-  await expect.poll(() => rows(panel), { timeout: 10_000 })
-    .toMatchObject([{ kind: 'link', text: 'One' }, { kind: 'link', text: 'Two' }]);
-
-  // Out with the button.
-  await panel.locator('[data-testid="bookmark-back"]').click();
-  await expect.poll(() => rows(panel), { timeout: 10_000 })
-    .toMatchObject([{ kind: 'folder', text: 'Reading' }, { kind: 'link', text: 'Loose' }]);
-
-  // And up again to the roots, where "Other bookmarks" lives and nothing can be written.
-  await panel.locator('[data-testid="bookmark-back"]').click();
-  await expect.poll(async () => (await header(panel)).backHidden, { timeout: 10_000 }).toBe(true);
-  expect(await panel.locator('[data-testid="bookmark-add"]').isDisabled()).toBe(true);
+  // Open a folder inside it. Same again, one level further in, and `Loose` — which
+  // comes after `Reading` in the bar — is still on screen below the expansion.
+  await clickRow(panel, 'Reading');
+  await expect.poll(async () => (await rows(panel)).slice(0, 5), { timeout: 10_000 })
+    .toMatchObject([
+      { kind: 'folder', text: 'Bookmarks bar', depth: 0 },
+      { kind: 'folder', text: 'Reading', depth: 1, expanded: 'true' },
+      { kind: 'link', text: 'One', depth: 2 },
+      { kind: 'link', text: 'Two', depth: 2 },
+      { kind: 'link', text: 'Loose', depth: 1 },
+    ]);
   expect(
-    (await rows(panel)).every((row) => row.kind === 'folder'),
-    'the bookmark roots are all folders',
+    (await rows(panel)).every((row) => row.bar === 0 || row.depth === 0),
+    'everything nested under the first bar carries that bar\'s stripe',
+  ).toBe(true);
+
+  // Left on a child steps out to the folder holding it; Left again closes that folder.
+  await panel.locator('[data-testid="bookmark-row"]', { hasText: 'One' }).first().focus();
+  await panel.keyboard.press('ArrowLeft');
+  await expect.poll(
+    () => panel.evaluate(() => {
+      const el = document.activeElement;
+      const main = el && el.querySelector ? el.querySelector('.w-row__main') : null;
+      return main ? main.textContent : null;
+    }),
+    { timeout: 10_000 },
+  ).toBe('Reading');
+
+  await panel.keyboard.press('ArrowLeft');
+  await expect.poll(async () => (await rows(panel)).slice(0, 3), { timeout: 10_000 })
+    .toMatchObject([
+      { kind: 'folder', text: 'Bookmarks bar', depth: 0 },
+      { kind: 'folder', text: 'Reading', depth: 1, expanded: 'false' },
+      { kind: 'link', text: 'Loose', depth: 1 },
+    ]);
+  expect((await rows(panel)).some((row) => row.text === 'One'),
+    'the folder is shut, so its contents are not rendered at all').toBe(false);
+
+  // Right opens it again, without the mouse.
+  await panel.keyboard.press('ArrowRight');
+  await expect.poll(async () => (await rows(panel)).some((row) => row.text === 'One'),
+    { timeout: 10_000 }).toBe(true);
+
+  // And the header button shuts the lot in one press, which is the way out of a tree
+  // that has been opened several levels deep.
+  await panel.locator('[data-testid="bookmark-collapse"]').click();
+  await expect.poll(async () => (await rows(panel)).every((row) => row.depth === 0),
+    { timeout: 10_000 }).toBe(true);
+  await expect.poll(async () => (await header(panel)).collapseHidden, { timeout: 10_000 })
+    .toBe(true);
+  // The button hides itself on that repaint, with focus on it. Handing focus back into
+  // the list is what keeps the arrow keys working; without it focus falls to <body> and
+  // the column is keyboard-dead until a row is clicked.
+  expect(
+    await panel.evaluate(() => {
+      const el = document.activeElement;
+      const list = document.querySelector('[data-testid="bookmark-list"]');
+      return !!(el && list && list.contains(el) && el.dataset && el.dataset.bookmarkId);
+    }),
+    'focus came back to a row rather than falling out of the column',
   ).toBe(true);
 
   // And at Chrome's own minimum panel width, with the column full. The tab list is the
   // thing the panel exists for; a side column that pushes it off the edge, or makes the
   // whole panel scroll sideways, has broken the feature it sits next to.
   await panel.setViewportSize({ width: 360, height: 720 });
-  await panel.locator('[data-testid="bookmark-row"]').first().click();
-  await expect.poll(async () => (await rows(panel)).length, { timeout: 10_000 })
-    .toBeGreaterThan(0);
+  await clickRow(panel, 'Bookmarks bar');
+  await expect.poll(async () => (await rows(panel)).some((row) => row.depth > 0),
+    { timeout: 10_000 }).toBe(true);
   const narrow = await panel.evaluate(() => ({
     overflows: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     listWidth: Math.round(document.getElementById('tablist').getBoundingClientRect().width),
@@ -691,6 +817,47 @@ granted('a folder opens, and every way back comes home again', async ({
   ).toEqual([]);
 });
 
+granted('an empty folder says so, and closing one gives up the write target', async ({
+  harness, serviceWorker,
+}) => {
+  granted.setTimeout(180_000);
+  const { panel } = harness;
+  await panel.setViewportSize({ width: 460, height: 900 });
+
+  await seedBookmarks(serviceWorker, [{ title: 'Nothing here', children: [] }]);
+  await showBookmarks(panel, serviceWorker);
+  await clickRow(panel, 'Bookmarks bar');
+
+  // Opening an empty folder has to look different from opening one whose read failed.
+  // Rendering nothing makes the two identical, and the drill-down this replaced did say
+  // "Empty" — so the line is a guarantee carried over, not a new flourish.
+  await clickRow(panel, 'Nothing here');
+  const marker = panel.locator('[data-testid="bookmark-folder-empty"]');
+  await expect(marker).toHaveCount(1, { timeout: 10_000 });
+  await expect(marker).toBeVisible();
+  expect(
+    await marker.getAttribute('data-bar'),
+    'the marker belongs to the same bar as the folder above it',
+  ).toBe('0');
+  expect(
+    (await rows(panel)).some((row) => row.text === ''),
+    'and it is not a row: nothing to focus, open or count',
+  ).toBe(false);
+
+  // Opening the folder is what offers it as the place a bookmark would go...
+  await expect.poll(
+    async () => panel.locator('[data-testid="bookmark-add"]').getAttribute('title'),
+    { timeout: 10_000 },
+  ).toBe('Add this tab to \u201cNothing here\u201d');
+
+  // ...and closing it withdraws the offer. The row is still on screen and still a
+  // folder, so nothing but the open state can tell; leaving the target set put the one
+  // write this column makes into a folder the reader had just shut.
+  await clickRow(panel, 'Nothing here');
+  await expect(marker).toHaveCount(0, { timeout: 10_000 });
+  await expect(panel.locator('[data-testid="bookmark-add"]')).toBeDisabled({ timeout: 10_000 });
+});
+
 granted('a bookmark already open activates that tab instead of opening a second copy', async ({
   harness, serviceWorker,
 }) => {
@@ -707,9 +874,14 @@ granted('a bookmark already open activates that tab instead of opening a second 
   ]);
   await showBookmarks(panel, serviceWorker);
 
-  await expect.poll(() => rows(panel), { timeout: 15_000 }).toMatchObject([
-    { kind: 'link', text: 'Alpha, already open', open: tabIds.alpha },
-    { kind: 'link', text: 'Never opened', open: null },
+  // The bar holds them, so open it: the tree starts shut.
+  await clickRow(panel, 'Bookmarks bar');
+  await expect.poll(
+    async () => (await rows(panel)).filter((row) => row.kind === 'link'),
+    { timeout: 15_000 },
+  ).toMatchObject([
+    { kind: 'link', text: 'Alpha, already open', open: tabIds.alpha, depth: 1 },
+    { kind: 'link', text: 'Never opened', open: null, depth: 1 },
   ]);
 
   // The dot is drawn for the one that is open and only for that one. One Map lookup per
@@ -719,7 +891,7 @@ granted('a bookmark already open activates that tab instead of opening a second 
   const before = await swEval(serviceWorker, (id) => chrome.tabs.query({ windowId: id })
     .then((ts) => ts.length), w2);
 
-  await panel.locator('[data-testid="bookmark-row"]').first().click();
+  await clickRow(panel, 'Alpha, already open');
 
   await expect.poll(
     () => swEval(serviceWorker, (id) => chrome.tabs.query({ active: true, windowId: id })
@@ -743,21 +915,29 @@ granted('the one write puts the active tab in the folder on screen', async ({
     { title: 'Keep', children: [] },
   ]);
   await showBookmarks(panel, serviceWorker);
-  await expect.poll(() => rows(panel), { timeout: 15_000 })
-    .toMatchObject([{ kind: 'folder', text: 'Keep' }]);
+  await clickRow(panel, 'Bookmarks bar');
+  await expect.poll(async () => (await rows(panel)).some((row) => row.text === 'Keep'),
+    { timeout: 15_000 }).toBe(true);
 
   await swEval(serviceWorker, (id) => chrome.tabs.update(id, { active: true }), tabIds.beta);
 
-  // Into the folder that is on screen — not the bar, not "Other bookmarks".
-  await panel.locator('[data-testid="bookmark-row"]').first().click();
-  await expect(panel.locator('[data-testid="bookmark-empty"]')).toBeVisible({ timeout: 10_000 });
+  // Opening a folder is also how you say where the tab should go. Nothing is written
+  // into the bar or into "Other bookmarks" just because they happen to be on screen.
+  await clickRow(panel, 'Keep');
+  await expect.poll(
+    async () => panel.locator('[data-testid="bookmark-add"]').getAttribute('title'),
+    { timeout: 10_000 },
+  ).toBe('Add this tab to \u201cKeep\u201d');
 
   await panel.locator('[data-testid="bookmark-add"]').click();
 
   // The row arrives through `onCreated`, which is the same path an edit made in Chrome's
-  // own bookmark manager takes — the write does not paint itself.
-  await expect.poll(() => rows(panel), { timeout: 10_000 }).toHaveLength(1);
-  await expect(panel.locator('[data-testid="bookmark-empty"]')).toBeHidden();
+  // own bookmark manager takes — the write does not paint itself. It lands INSIDE Keep,
+  // one level below it, not beside it.
+  await expect.poll(
+    async () => (await rows(panel)).filter((row) => row.kind === 'link' && row.depth === 2).length,
+    { timeout: 10_000 },
+  ).toBe(1);
 
   const stored = await swEval(serviceWorker, (folderId) => chrome.bookmarks.getChildren(folderId)
     .then((kids) => kids.map((k) => ({ title: k.title, url: k.url }))), seeded.ids.Keep);
@@ -791,21 +971,35 @@ granted('a long folder arrives in chunks and grows as it is scrolled', async ({
   expect(big).toBeTruthy();
 
   await showBookmarks(panel, serviceWorker);
-  await panel.locator('[data-testid="bookmark-row"]').first().click();
+  await clickRow(panel, 'Bookmarks bar');
+  await clickRow(panel, 'Big');
 
-  // Exactly one chunk, and the count of what is still to come.
+  // One chunk of the WHOLE open tree, not of one folder: the rows are flattened before
+  // they are cut, so the roots and the bar's other children count against the 150 too.
   await expect(panel.locator('[data-testid="bookmark-row"]')).toHaveCount(150, { timeout: 20_000 });
   const more = panel.locator('[data-testid="bookmark-more"]');
   await expect(more).toBeVisible();
-  await expect(more).toHaveText(`${total - 150} more`);
+  const remaining = Number(((await more.textContent()) || '').replace(/\D+/g, ''));
+  expect(remaining, 'the button says how many rows are still to come').toBeGreaterThan(0);
+
+  // Not one of the 170 is missing from the model — they are just not built yet.
+  expect(
+    (await rows(panel)).filter((row) => row.text.startsWith('Item ')).length,
+    'the first chunk is items, not a placeholder',
+  ).toBeGreaterThan(0);
 
   await panel.evaluate(() => {
     const rail = document.getElementById('bookmark-rail');
     rail.scrollTop = rail.scrollHeight;
   });
 
-  await expect(panel.locator('[data-testid="bookmark-row"]')).toHaveCount(total, { timeout: 20_000 });
+  await expect(panel.locator('[data-testid="bookmark-row"]'))
+    .toHaveCount(150 + remaining, { timeout: 20_000 });
   await expect(more).toBeHidden();
+  expect(
+    (await rows(panel)).filter((row) => row.text.startsWith('Item ')).length,
+    'and every item is there once the list has grown',
+  ).toBe(total);
 });
 
 granted('a bookmark deleted anywhere else leaves the column', async ({
@@ -820,8 +1014,9 @@ granted('a bookmark deleted anywhere else leaves the column', async ({
     { title: 'Goes', url: 'https://goes.example.com/2' },
   ]);
   await showBookmarks(panel, serviceWorker);
-  await expect.poll(() => rows(panel), { timeout: 15_000 })
-    .toMatchObject([{ text: 'Stays' }, { text: 'Goes' }]);
+  await clickRow(panel, 'Bookmarks bar');
+  await expect.poll(async () => (await rows(panel)).filter((row) => row.kind === 'link'),
+    { timeout: 15_000 }).toMatchObject([{ text: 'Stays' }, { text: 'Goes' }]);
 
   // Deleted from outside the panel entirely — this is what Chrome's bookmark manager,
   // a sync, or another window looks like from in here. The listener lives in the PANEL
@@ -829,7 +1024,8 @@ granted('a bookmark deleted anywhere else leaves the column', async ({
   // optional and ungranted), and a burst of them is one repaint.
   await swEval(serviceWorker, (id) => chrome.bookmarks.remove(id), seeded.ids.Goes);
 
-  await expect.poll(() => rows(panel), { timeout: 10_000 }).toMatchObject([{ text: 'Stays' }]);
+  await expect.poll(async () => (await rows(panel)).filter((row) => row.kind === 'link'),
+    { timeout: 10_000 }).toMatchObject([{ text: 'Stays' }]);
 });
 
 granted('the bookmark column does not impersonate a tab card', async ({
@@ -846,6 +1042,7 @@ granted('the bookmark column does not impersonate a tab card', async ({
     { title: 'A folder', children: [{ title: 'Inside', url: 'https://inside.example.com/' }] },
   ]);
   await showBookmarks(panel, serviceWorker);
+  await clickRow(panel, 'Bookmarks bar');
   await expect(panel.locator('[data-testid="bookmark-open-dot"]')).toHaveCount(1, { timeout: 15_000 });
 
   // Ported verbatim from 22-widgets.spec.js:103-118, which says the same thing about the
@@ -878,7 +1075,9 @@ granted('losing the permission returns the card and leaves the layout alone', as
     { title: 'Before', url: 'https://before.example.com/1' },
   ]);
   await showBookmarks(panel, serviceWorker);
-  await expect.poll(() => rows(panel), { timeout: 15_000 }).toMatchObject([{ text: 'Before' }]);
+  await clickRow(panel, 'Bookmarks bar');
+  await expect.poll(async () => (await rows(panel)).filter((row) => row.kind === 'link'),
+    { timeout: 15_000 }).toMatchObject([{ text: 'Before' }]);
 
   // A real revoke cannot be staged: this fixture makes `bookmarks` a REQUIRED permission
   // so that Chrome grants it at load, and `permissions.remove()` refuses a required one.

@@ -630,6 +630,14 @@
     "message": "Bookmarks",
     "description": "Side-column mode option: the bookmark rail"
   },
+  "railModeButton": {
+    "message": "Bookmarks in the side column",
+    "description": "Accessible name of the topbar button that chooses what the side column holds. Fixed: aria-pressed carries the state and the tooltip carries the action."
+  },
+  "railSwitchToBookmarks": {
+    "message": "Show bookmarks instead",
+    "description": "Tooltip on the topbar toggle while the side column shows the tools. Names the action, not the state."
+  },
   "railSwitchToTools": {
     "message": "Show tools instead",
     "description": "Label on the control that switches the side column back to tools"
@@ -682,10 +690,6 @@
     "message": "Try again",
     "description": "Button that re-reads the bookmark folder after a failed read"
   },
-  "bookmarksBack": {
-    "message": "Up one folder",
-    "description": "Button returning to the parent bookmark folder"
-  },
   "bookmarksMore": {
     "message": "$COUNT$ more",
     "description": "Footer of a folder listing that was cut short",
@@ -695,13 +699,37 @@
       }
     }
   },
+  "bookmarksCollapseAll": {
+    "message": "Close every folder",
+    "description": "Header button in the bookmark column: shuts every open folder at once."
+  },
+  "bookmarksAddTo": {
+    "message": "Add this tab to “$FOLDER$”",
+    "description": "Tooltip on the button that bookmarks the current tab. $FOLDER$ is the name of the folder the reader has open, which is where it will go.",
+    "placeholders": {
+      "folder": {
+        "content": "$1",
+        "example": "Reading"
+      }
+    }
+  },
+  "bookmarksAddedTo": {
+    "message": "Added to “$FOLDER$”",
+    "description": "Toast after the current tab was bookmarked. $FOLDER$ is the folder it went into.",
+    "placeholders": {
+      "folder": {
+        "content": "$1",
+        "example": "Reading"
+      }
+    }
+  },
+  "bookmarksAddNoFolder": {
+    "message": "Open a folder first — that is where the tab goes",
+    "description": "Toast when the bookmark button is used with no folder open, so there is nowhere to put the tab."
+  },
   "bookmarksAddCurrentTab": {
     "message": "Bookmark this tab",
     "description": "The one write the bookmark rail performs"
-  },
-  "bookmarksAdded": {
-    "message": "Bookmarked.",
-    "description": "Toast after saving the current tab as a bookmark"
   },
   "bookmarksAlreadyOpen": {
     "message": "That page is already open",

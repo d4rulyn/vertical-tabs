@@ -66,6 +66,11 @@ const loadSettings =
     ? settingsMod.loadSettings
     : async () => state.state.settings;
 
+const saveSettings =
+  typeof settingsMod.saveSettings === 'function'
+    ? settingsMod.saveSettings
+    : async () => {};
+
 const loadHints =
   typeof settingsMod.loadHints === 'function'
     ? settingsMod.loadHints
@@ -142,6 +147,7 @@ function collectRefs() {
   el.searchCount = document.getElementById('search-count');
   el.searchEmpty = document.getElementById('search-empty');
   el.btnSettings = document.getElementById('btn-settings');
+  el.btnRailMode = document.getElementById('btn-rail-mode');
   el.btnNewTab = document.getElementById('btn-new-tab');
   el.btnTrash = document.getElementById('btn-trash');
   el.btnPopout = document.getElementById('btn-popout');
@@ -237,6 +243,7 @@ async function boot() {
   ]);
   windowId = hostWindowId;
   render.applySettingsAttrs(settings);
+  applyRailModeButton(settings);
   watchSystemTheme();
   state.state.testMode = testMode;
   // The detached copy lives in its own popup window but keeps listing the window it
@@ -580,6 +587,16 @@ function registerUi() {
     });
   }
 
+  if (el.btnRailMode) {
+    el.btnRailMode.addEventListener('click', () => {
+      // Written to storage rather than to a local copy, the way the strip's own toggle
+      // does it: `storage.onChanged` is what tells the rail, the strip and the drawer
+      // at once, in every panel that is open.
+      const next = state.state.settings.railMode === 'bookmarks' ? 'tools' : 'bookmarks';
+      void saveSettings({ railMode: next }).catch((e) => log.warn('railMode', e));
+    });
+  }
+
   if (el.btnSettings) {
     el.btnSettings.addEventListener('click', () => {
       if (modules.settingsView) return;
@@ -631,9 +648,28 @@ function registerUi() {
   });
 }
 
+/**
+ * Three jobs, three attributes. The accessible NAME is fixed and names the control
+ * ("Bookmarks in the side column"); `aria-pressed` carries the STATE; the tooltip
+ * carries the ACTION. Putting the action in the name as well produced the reading
+ * "Show tools instead, toggle button, pressed" while the column showed bookmarks,
+ * which says the state twice and contradicts itself once.
+ *
+ * @param {import('../common/settings-schema.js').Settings} settings
+ */
+function applyRailModeButton(settings) {
+  const button = el.btnRailMode;
+  if (!button) return;
+  const bookmarks = settings.railMode === 'bookmarks';
+  button.setAttribute('aria-pressed', bookmarks ? 'true' : 'false');
+  button.setAttribute('aria-label', t('railModeButton'));
+  button.title = bookmarks ? t('railSwitchToTools') : t('railSwitchToBookmarks');
+}
+
 function registerStateSubscriptions() {
   state.subscribe('settings', (settings) => {
     render.applySettingsAttrs(settings);
+    applyRailModeButton(settings);
     widgets.apply(railWidgets(settings));
     // First time into `bookmarks` mode this is where the column is imported; every time
     // after, it is a comparison and a resolved promise nobody waits on.
