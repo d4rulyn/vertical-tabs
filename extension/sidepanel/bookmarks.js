@@ -2,9 +2,19 @@
  * The bookmark column — what the side column holds while `settings.railMode` is
  * `bookmarks`.
  *
- * READ-ONLY, with exactly one write: "bookmark the current tab". No rename, no delete,
- * no move, no reorder, no drag-and-drop with the tab list. That is a product decision,
- * not a limit of the API, and there is deliberately no dead code here for any of them.
+ * It lists the bookmarks, opens them, and writes to them in two ways: "bookmark the current
+ * tab" (here), and the editing of the tree (PR2: a new folder and a rename, each done in a text
+ * field in the list, and moving a row by dragging it, by its menu and by Alt+Arrow), whose writes
+ * are `bookmark-write.js`'s. Every call to `chrome.bookmarks` goes through `bm()` below, the one
+ * place in the extension that names the namespace, with a literal method name from the set
+ * `getChildren, get, create, update, move` (`tests/unit/bookmark-claims.test.mjs` reads the
+ * source and fails on anything else). There is no delete, no search and no whole-tree read, and
+ * no drag-and-drop between this list and the tab list: those are product decisions, not limits
+ * of the API.
+ *
+ * Editing reaches the paint path through the seam under "Holding the repaint" and the `host`
+ * object below. The modules that do it are attached to the list when it is built: the drag
+ * (`bookmark-dnd.js`), the row menu and its keys (`bookmark-menu.js`).
  *
  * ── What this file owns and what it does not ────────────────────────────────
  * It fills `#bookmark-rail` and empties it again. It NEVER touches that element's
@@ -33,7 +43,8 @@
  * every bookmark listener lives here, in the panel.
  *
  * ── Reading ─────────────────────────────────────────────────────────────────
- * `getChildren()` only. `getTree()` is never called: measured at 59 ms and 1 MB of JSON
+ * The listing is `getChildren()` only (the write module also asks `get()` for the one node it
+ * is about to change). `getTree()` is never called: measured at 59 ms and 1 MB of JSON
  * on a 5 041-node tree, against 0.6–1.5 ms for one folder. One folder can still be big
  * — 5 000 children is 100 ms and 995 KB — so rows are appended in chunks of 150 behind
  * an `IntersectionObserver` sentinel.
@@ -50,6 +61,9 @@ import * as log from '../common/log.js';
 import * as ops from './tab-ops.js';
 import { urlKey } from '../common/url-key.js';
 import { STORAGE_SESSION, faviconUrl, FAVICON_SIZE } from '../common/constants.js';
+import { createFolder, queue, renameNode } from './bookmark-write.js';
+import { attach as attachDnd } from './bookmark-dnd.js';
+import { attach as attachRowMenu } from './bookmark-menu.js';
 
 const t = (key, subs) => i18n.t(key, subs);
 
@@ -125,7 +139,7 @@ const S = {
 
   /** @type {Set<string>} the folders that are open. Everything else is one row. */
   expanded: new Set(),
-  /** @type {Array<{node: any, depth: number, bar: number}>} the tree, flattened. */
+  /** @type {Entry[]} the tree, flattened. */
   rows: [],
   /** How many of `rows` have DOM. */ rendered: 0,
   /** @type {string} the folder the bookmark button writes into. Never the root. */
@@ -133,10 +147,36 @@ const S = {
   /** @type {number} scrollTop waiting to be restored after the first chunk. */ pendingScroll: 0,
   /** Rising counter that makes a late `paint()` drop its result. */ paintToken: 0,
 
+  /**
+   * Why `paint()` may not rebuild the rows right now: `'drag'` (a drag is in progress) or
+   * `'edit'` (a name is being typed). See "Holding the repaint".
+   * @type {Set<'drag'|'edit'>}
+   */
+  hold: new Set(),
+  /** A `paint()` was asked for while something was held; the last release runs it. */
+  repaintOwed: false,
+  /** `paint()` is emptying the list right now: a `blur` that fires inside that call is not the reader's. */
+  rebuilding: false,
+  /**
+   * The drag-and-drop module (`bookmark-dnd.js`) attached to the current list. It owns the drag in
+   * progress; `clearFrame()` detaches it, which ends that drag.
+   * @type {{ detach: () => void, active: () => boolean }|null}
+   */
+  drag: null,
+  /**
+   * The row menu and its keys (`bookmark-menu.js`) attached to the current list; `clearFrame()` detaches
+   * it, which closes the menu if it is open.
+   * @type {{ detach: () => void, onKey: (event: KeyboardEvent, row: HTMLElement) => boolean }|null}
+   */
+  menu: null,
+  /** @type {any} the name being typed, if any (a folder being made, a node being renamed); `clearFrame()` drops it. */
+  edit: null,
+
   /** @type {HTMLElement|null} */ head: null,
   /** @type {HTMLElement|null} */ title: null,
   /** @type {HTMLButtonElement|null} */ collapse: null,
   /** @type {HTMLButtonElement|null} */ add: null,
+  /** @type {HTMLButtonElement|null} */ newFolder: null,
   /** @type {HTMLElement|null} */ list: null,
   /** @type {HTMLElement|null} */ empty: null,
   /** @type {HTMLElement|null} */ error: null,
@@ -144,6 +184,8 @@ const S = {
   /** @type {HTMLElement|null} */ pending: null,
   /** @type {HTMLElement|null} */ pendingText: null,
   /** @type {HTMLElement|null} */ escape: null,
+  /** @type {{ detach: Function, rendered: Function }|null} the hover preview, once loaded */
+  preview: null,
 
   /** @type {IntersectionObserver|null} */ io: null,
   /** @type {Array<{ event: any, fn: Function }>} */ bound: [],
@@ -268,12 +310,24 @@ function stop() {
  * nothing, and no timer or observer is left holding a node that is no longer on screen.
  */
 function clearFrame() {
+  // The edit, the drag and the holds go FIRST, before the rail is emptied: removing a focused
+  // text field fires `blur` inside the DOM call while the field is still connected (Probe 16
+  // Result 6), and a handler that still found an edit would write the half-typed name.
+  if (S.edit) S.edit.done = true;
+  S.edit = null;
+  window.removeEventListener('focus', onWindowFocus); // an ignored blur no longer waits for the window
+  detachDrag();
+  detachMenu();
+  S.hold.clear();
+  S.repaintOwed = false;
+  detachPreview();
   disconnectObserver();
   if (S.rail) S.rail.textContent = '';
   S.head = null;
   S.title = null;
   S.collapse = null;
   S.add = null;
+  S.newFolder = null;
   S.list = null;
   S.empty = null;
   S.error = null;
@@ -496,11 +550,17 @@ function showGrantDeclined() {
  * permission still in place is NOT a revoke and gets the retry state
  * (`showReadError()`), because offering a grant that is already granted is a dead end.
  *
+ * Once the panel is destroyed it answers `null` without calling Chrome: a write that was
+ * queued before `destroy()` still runs afterwards (the queue in `bookmark-write.js` is
+ * module-wide), and it must find nothing to write to rather than act for a document that
+ * has said good-bye. A `null` is how every caller already reads "the call failed".
+ *
  * @param {string} method a `chrome.bookmarks` method name
  * @param {...any} args
  * @returns {Promise<any|null>} `null` when the call failed
  */
 async function bm(method, ...args) {
+  if (S.dead) return null;
   try {
     return await chrome.bookmarks[method](...args);
   } catch (e) {
@@ -525,6 +585,132 @@ function isFolder(node) {
   return Boolean(node) && !('url' in node);
 }
 
+/* ── Holding the repaint ─────────────────────────────────────────────────── */
+
+/**
+ * `paint()` rebuilds every row, and a rebuild is fatal to two things that need the rows to
+ * stand still: a drag in progress (Probe 13 P8: when the source node leaves the DOM mid-drag,
+ * `dragend` is never delivered and the drop lands on whatever is under the pointer) and a
+ * name being typed (Probe 16 Result 6: removing a focused element fires `blur` inside the DOM
+ * call while the element is still connected, so a commit-on-blur handler would write the
+ * half-typed name).
+ *
+ * While any reason is held, `paint()` changes nothing — not `S.expanded`, not `S.rows`, not
+ * the DOM — and only remembers that a repaint is owed. The release of the LAST reason runs one.
+ * It checks at its entry AND after each of its awaits, because a paint that was already in
+ * flight when the hold began would otherwise finish underneath it.
+ *
+ * @param {'drag'|'edit'} reason
+ */
+function holdRepaint(reason) {
+  S.hold.add(reason);
+}
+
+/**
+ * Drop one reason. If it was the last and a repaint was asked for in the meantime, run it. With
+ * `afterPress` that repaint does not start while a mouse button is down: it waits for the release
+ * (see `paintAfterPress`).
+ * @param {'drag'|'edit'} reason
+ * @param {boolean} [afterPress]
+ */
+function releaseHold(reason, afterPress = false) {
+  if (!S.hold.delete(reason)) return;
+  if (S.hold.size !== 0 || !S.repaintOwed) return;
+  if (afterPress) paintAfterPress();
+  else void paint();
+}
+
+/**
+ * Repaint, but not under the pointer. A press on another row ends an open edit inside that very
+ * press (the field's blur fires on the mousedown), and a repaint started then rebuilds every row,
+ * the one under the pointer included: the release finds no node to complete the click on (Chrome
+ * sends none when the node the button went down on has left the document), so the click that ended
+ * the edit is lost. While a button is down the repaint waits for it to come up. `:active` on the
+ * root is the browser's own answer to "is a button down", so there is nothing to keep in step. If
+ * the release never comes (a drag takes it over) nothing is lost but the wait: every other request
+ * for a repaint goes through `paint()` as before.
+ */
+function paintAfterPress() {
+  if (document.documentElement.matches(':active')) {
+    document.addEventListener('mouseup', paintSoon, { capture: true, once: true });
+    return;
+  }
+  void paint();
+}
+
+/** The release `paintAfterPress` waited for. The click it completes is dispatched in this same task, so the paint goes after it. */
+function paintSoon() {
+  setTimeout(() => void paint(), 0);
+}
+
+/**
+ * Is a repaint forbidden right now? If so it is remembered as owed.
+ * @returns {boolean}
+ */
+function repaintHeld() {
+  if (S.hold.size === 0) return false;
+  S.repaintOwed = true;
+  return true;
+}
+
+/* ── What the code that edits the tree is handed ─────────────────────────── */
+
+/**
+ * Open a folder in the model without painting; the caller paints. Saves the view, because the
+ * open set is part of it.
+ * @param {string} id
+ */
+function expand(id) {
+  if (!id || S.expanded.has(id)) return;
+  S.expanded.add(id);
+  saveView();
+}
+
+/**
+ * Put focus on the row of node `id` and bring it into view, rendering further chunks first if
+ * the row is in the model but not yet in the DOM (a folder longer than one chunk).
+ * @param {string} id
+ * @returns {boolean} whether there was such a row
+ */
+function focusRowById(id) {
+  if (!S.list || S.phase !== 'list') return false;
+  const want = String(id);
+  const at = S.rows.findIndex((entry) => entry.node && !entry.empty && String(entry.node.id) === want);
+  if (at < 0) return false;
+  while (S.rendered <= at && S.rendered < S.rows.length) renderChunk();
+  const row = S.list.querySelector(`[data-bookmark-id="${cssEscape(want)}"]`);
+  if (!(row instanceof HTMLElement)) return false;
+  focusRow(row);
+  row.scrollIntoView({ block: 'nearest' });
+  return true;
+}
+
+/**
+ * The one object the modules that edit the tree receive (`bookmark-write.js` takes it as its
+ * `host`; the drag and the menu modules take it too). Nothing in it names `chrome.bookmarks`:
+ * `bm` is the wrapper above, and the rows, the rail and the list are read through functions
+ * because the frame is rebuilt and these change.
+ */
+const host = {
+  bm,
+  /** One line per refusal or decision, from `bookmark-write.js` and the drag and menu modules: ids and counts, never titles or URLs. */
+  log: (line) => log.info('bookmarks write', line),
+  /** Repaint now (subject to the hold). Resolves `true` when the rows were rebuilt. */
+  paintNow: () => paint(),
+  hold: (reason) => holdRepaint(reason),
+  release: (reason) => releaseHold(reason),
+  expand,
+  toast: (text) => toast(text),
+  focusRowById,
+  rows: () => S.rows,
+  rail: () => S.rail,
+  list: () => S.list,
+  /** Open the name field for a new folder in `parentId`, after the row `anchorId` or at the end. */
+  beginCreate: (parentId, anchorId) => beginCreate(parentId, anchorId),
+  /** Open the name field in place of the row of node `id`. Does nothing for a row that cannot be renamed. */
+  beginRename: (id) => beginRename(id),
+};
+
 /* ── The frame ───────────────────────────────────────────────────────────── */
 
 function buildFrame() {
@@ -533,6 +719,9 @@ function buildFrame() {
   // observer, and an `IntersectionObserver` holds its targets strongly. `clearFrame()`
   // does this; a rebuild that skipped it would strand the whole detached subtree for the
   // life of the panel.
+  detachPreview();
+  detachDrag();
+  detachMenu();
   disconnectObserver();
   S.rail.textContent = '';
 
@@ -568,7 +757,19 @@ function buildFrame() {
   add.append(glyph('i-bookmark', 'icon'));
   add.addEventListener('click', () => void addCurrentTab());
 
-  head.append(collapse, title, add);
+  // Aimed at the same folder as the button beside it: the one opened last (D2). Its label,
+  // like that button's, names the folder, and `paintHeader()` disables it while there is none.
+  const newFolder = document.createElement('button');
+  newFolder.type = 'button';
+  newFolder.className = 'iconbtn bmk__new';
+  newFolder.dataset.testid = 'bookmark-new-folder';
+  newFolder.setAttribute('aria-label', t('bookmarksNewFolder'));
+  newFolder.title = t('bookmarksNewFolder');
+  newFolder.disabled = true;
+  newFolder.append(glyph('i-folder-plus', 'icon'));
+  newFolder.addEventListener('click', onNewFolderClick);
+
+  head.append(collapse, title, newFolder, add);
 
   // A tree with a roving tabindex. The DOM is flat — one button per visible row — and
   // `aria-level` carries the nesting, which keeps the chunked rendering and the arrow
@@ -630,10 +831,94 @@ function buildFrame() {
   S.title = title;
   S.collapse = collapse;
   S.add = add;
+  S.newFolder = newFolder;
   S.list = list;
   S.empty = empty;
   S.error = error;
   S.more = more;
+  attachDrag(list);
+  attachMenu(list);
+  attachPreview(list);
+}
+
+/* ── Dragging rows ───────────────────────────────────────────────────────── */
+
+/**
+ * Hand a list to `bookmark-dnd.js`, which listens on the rail for as long as this list lives. The
+ * rows are `draggable` (`buildRow`); the module does the rest through `host`.
+ * @param {HTMLElement} list
+ */
+function attachDrag(list) {
+  if (!S.rail) return;
+  S.drag = attachDnd({ host, rail: S.rail, list });
+}
+
+/** Take the module off the list. Ends a drag in progress and releases its hold. */
+function detachDrag() {
+  const drag = S.drag;
+  S.drag = null;
+  if (!drag) return;
+  try {
+    drag.detach();
+  } catch (e) {
+    log.warn('bookmark drag detach', e);
+  }
+}
+
+/* ── The row menu ────────────────────────────────────────────────────────── */
+
+/**
+ * Hand a list to `bookmark-menu.js`, which listens for the `contextmenu` on it and on the rail's
+ * scroll, and is asked about the keys of a row (`onListKeyDown`). It does the rest through `host`.
+ * @param {HTMLElement} list
+ */
+function attachMenu(list) {
+  if (!S.rail) return;
+  S.menu = attachRowMenu({ host, rail: S.rail, list });
+}
+
+/** Take the module off the list. Closes its menu if it is open. */
+function detachMenu() {
+  const menu = S.menu;
+  S.menu = null;
+  if (!menu) return;
+  try {
+    menu.detach();
+  } catch (e) {
+    log.warn('bookmark menu detach', e);
+  }
+}
+
+/* ── The hover preview ───────────────────────────────────────────────────── */
+
+/**
+ * Load `bookmark-preview.js` the first time a list is built and hand it that list. A
+ * dynamic import from here and nowhere else: an ungranted column never builds a list, so
+ * it never loads the module, and this whole file is itself only imported for the
+ * `bookmarks` mode, so boot pays nothing. The module owns its listeners and its one card
+ * and only ever reads; this file says which list it is watching and when that list is
+ * replaced.
+ * @param {HTMLElement} list
+ */
+function attachPreview(list) {
+  import('./bookmark-preview.js').then((mod) => {
+    // The frame can be rebuilt, or the panel closed, while the module loads.
+    if (S.dead || S.list !== list || S.preview) return;
+    S.preview = mod.attach({ ctx: S.ctx, rail: S.rail, list });
+    // The rows that were drawn before the module arrived.
+    S.preview.rendered();
+  }).catch((e) => log.warn('bookmark preview not loaded', e));
+}
+
+function detachPreview() {
+  const preview = S.preview;
+  S.preview = null;
+  if (!preview) return;
+  try {
+    preview.detach();
+  } catch (e) {
+    log.warn('bookmark preview detach', e);
+  }
 }
 
 /**
@@ -687,11 +972,32 @@ function glyph(href, className) {
 /**
  * Re-read the open tree and redraw it. The roots, plus the children of every folder
  * that is open — nothing else is read, and `getTree()` is never called.
- * @returns {Promise<void>}
+ *
+ * Nothing is changed while a hold is set ("Holding the repaint"): the check is made here, and
+ * again after each await, before `S.expanded`, `S.rows` or the DOM are touched.
+ *
+ * @returns {Promise<boolean>} `true` when THIS call finished the job (it rebuilt the rows, or put
+ *   the read error on screen); `false` when it did not: it was superseded by a newer paint, a hold
+ *   was set, or there was no list to paint into
  */
 async function paint() {
-  if (S.phase !== 'list' || !S.list || !S.rail) return;
+  if (S.phase !== 'list' || !S.list || !S.rail) return false;
+  if (repaintHeld()) return false;
+  // Asked for, and about to be answered by this very call. A hold that begins while it is
+  // awaiting sets the flag again, in `repaintHeld()`.
+  S.repaintOwed = false;
   const token = (S.paintToken += 1);
+  // A repaint that a tree event armed BEFORE this paint began is answered by this paint, which reads the tree
+  // after that event: left armed it would rebuild every row a second time, 400 ms later. That is what followed
+  // every write of the column's own (Chrome's event arms the timer before the write's promise resolves, and
+  // the paint the write asks for then runs), and the second rebuild landed under whatever the reader had begun
+  // in between: a press whose node leaves the document gets no click (see `paintAfterPress`). An event that
+  // arrives AFTER this line is not covered, and has to repaint: `scheduleRepaint` finds no timer and arms one.
+  // A paint that is held, or that finds no list, returned above and leaves the timer (and the debt) alone.
+  if (S.repaintTimer) {
+    clearTimeout(S.repaintTimer);
+    S.repaintTimer = 0;
+  }
 
   // The children this paint read, and nobody else's. It was module state once; two
   // paints overlapping then wrote into one map, an older paint's pre-change read
@@ -703,16 +1009,21 @@ async function paint() {
   const kids = new Map();
 
   const roots = await readFolder(ROOT_ID, kids, token);
-  if (token !== S.paintToken || S.phase !== 'list' || !S.list) return;
+  if (token !== S.paintToken || S.phase !== 'list' || !S.list) return false;
+  if (repaintHeld()) return false;
   if (!roots) {
     // `bm()` has already decided whether the permission went and shown the grant card.
     // The roots are the top, so there is nowhere to fall back to.
     showReadError();
-    return;
+    return true;
   }
 
   const gone = await loadExpanded(roots, kids, token);
-  if (token !== S.paintToken || S.phase !== 'list' || !S.list) return;
+  if (token !== S.paintToken || S.phase !== 'list' || !S.list) return false;
+  // Before `S.expanded` is touched below, and before the rows are: this is the check that
+  // keeps a paint which was already awaiting its reads when a drag began from finishing
+  // underneath it.
+  if (repaintHeld()) return false;
   // A folder that stopped reading stops counting as open, or every later paint would
   // try it again and the chevron would stay pointing down over nothing.
   for (const id of gone) S.expanded.delete(id);
@@ -726,6 +1037,16 @@ async function paint() {
   const keepFocus = active instanceof HTMLElement && S.list.contains(active)
     ? active.dataset.bookmarkId || null
     : null;
+  // The name field has no `data-bookmark-id`, so the lookup above cannot find it again. The hold
+  // keeps a paint from running while the field is up, so this is the second line of defence, not
+  // a path the column takes: should a paint ever run with the field focused, what was typed and
+  // where the caret was are read BEFORE the list is emptied, and put back after.
+  const keepField = S.edit && S.edit.input && active === S.edit.input ? S.edit : null;
+  if (keepField && keepField.input) {
+    keepField.draft = keepField.input.value;
+    keepField.selStart = keepField.input.selectionStart ?? keepField.draft.length;
+    keepField.selEnd = keepField.input.selectionEnd ?? keepField.draft.length;
+  }
 
   S.rows = flatten(roots, kids);
   // Closing a folder can hide the one the bookmark button was aimed at, which stays
@@ -737,13 +1058,20 @@ async function paint() {
     saveView();
   }
   S.rendered = 0;
+  // Emptying the list removes a focused field, and that fires `blur` inside this very call (Probe
+  // 16 Result 6). A blur is a commit, and this is not the reader leaving the field.
+  S.rebuilding = true;
   S.list.textContent = '';
+  S.rebuilding = false;
   if (S.empty) S.empty.hidden = S.rows.length > 0;
   if (S.error) S.error.hidden = true;
 
+  // A name being typed has to be in the DOM however far down the model it is: a new folder
+  // goes at the END of its folder, and in a long folder that is past the first chunk.
+  const through = S.edit ? S.rows.findIndex((entry) => entry.pending || entry.editing) : -1;
   do {
     renderChunk();
-  } while (S.rendered < keepRendered && S.rendered < S.rows.length);
+  } while ((S.rendered < keepRendered || S.rendered <= through) && S.rendered < S.rows.length);
 
   paintHeader();
 
@@ -751,10 +1079,13 @@ async function paint() {
   S.pendingScroll = 0;
   if (scroll > 0) S.rail.scrollTop = scroll;
 
-  if (keepFocus) {
+  if (keepField) {
+    focusEdit(keepField);
+  } else if (keepFocus) {
     const again = S.list.querySelector(`[data-bookmark-id="${cssEscape(keepFocus)}"]`);
     if (again instanceof HTMLElement) focusRow(again);
   }
+  return true;
 }
 
 /**
@@ -818,35 +1149,82 @@ async function loadExpanded(roots, kids, token) {
 }
 
 /**
+ * One line of the flattened tree. Everything a module that edits the tree needs to know about
+ * a row is here, so that a menu or a drag never has to ask Chrome or the DOM what is on screen.
+ *
+ * @typedef {object} Entry
+ * @property {any} node Chrome's node. For an `empty` entry it is the FOLDER the marker sits in;
+ *   for a `pending` entry it is `null`, because there is no node yet.
+ * @property {number} depth 0 for a permanent folder (a child of the root), 1 inside one, and so on.
+ * @property {number} bar index of the root the row descends from, which the stripe colours by.
+ * @property {boolean} [empty] the "nothing here" line of an open, empty folder (not a row)
+ * @property {boolean} [pending] the edit row of a folder that is being made (see "Editing a name"):
+ *   not a row either, and not a drop target. Has `parentId` and `index`, the place it will take.
+ * @property {boolean} [editing] this node is being renamed: its row is drawn as the edit row for as
+ *   long as the edit lasts. It is still the node's entry, with everything above.
+ * @property {string} [parentId] the folder this node is a child of (absent on an `empty` entry)
+ * @property {number} [index] its position among the parent's children when this paint read them
+ * @property {number} [siblings] how many children the parent had then, so `index === siblings - 1` is the last
+ * @property {boolean} [modifiable] false for a node Chrome marks `unmodifiable` (a managed
+ *   bookmark). A permanent folder IS modifiable in the sense of "can be a destination"
+ *   (Probe 17 PB) even though it can be neither renamed nor moved: that is `depth === 0`.
+ */
+
+/**
  * The open tree as one array, in the order it is read down the column. `bar` is the
  * index of the root every row descends from, which is what the stripe colours by.
  *
  * @param {any[]} roots
  * @param {Map<string, any[]>} kids this paint's map
- * @returns {Array<{node: any, depth: number, bar: number, empty?: boolean}>}
+ * @returns {Entry[]}
  */
 function flatten(roots, kids) {
-  /** @type {Array<{node: any, depth: number, bar: number, empty?: boolean}>} */
+  /** @type {Entry[]} */
   const out = [];
 
-  /** @param {any} node @param {number} depth @param {number} bar */
-  const push = (node, depth, bar) => {
+  /**
+   * @param {any} node @param {number} depth @param {number} bar
+   * @param {string} parentId @param {number} index @param {number} siblings
+   */
+  const push = (node, depth, bar, parentId, index, siblings) => {
     if (out.length >= MAX_TREE_ROWS) return;
-    out.push({ node, depth, bar });
-    if (!isFolder(node) || !S.expanded.has(String(node.id))) return;
-    const children = kids.get(String(node.id));
+    const id = String(node.id);
+    /** @type {Entry} */
+    const entry = { node, depth, bar, parentId, index, siblings, modifiable: !node.unmodifiable };
+    if (S.edit && S.edit.mode === 'rename' && S.edit.id === id) entry.editing = true;
+    out.push(entry);
+    if (!isFolder(node) || !S.expanded.has(id)) return;
+    const children = kids.get(id);
     if (!children) return;
-    if (children.length === 0) {
+
+    // A folder being made takes its place among the children, so it is part of the model and
+    // `renderChunk` / `paint` treat it like any row: chunking, scrolling and focus need no
+    // second path. After the row it was asked to follow, or at the end.
+    const making = S.edit && S.edit.mode === 'create' && S.edit.parentId === id ? S.edit : null;
+    /** @param {number} at */
+    const pending = (at) => ({
+      node: null, pending: true, depth: depth + 1, bar, parentId: id, index: at, siblings: children.length,
+    });
+
+    if (children.length === 0 && !making) {
       // An open folder with nothing in it has to say so. Rendering nothing makes it
       // look identical to one whose read failed, and the drill-down it replaced did
       // say "Empty" — dropping that was a regression, not a simplification.
       out.push({ node, depth: depth + 1, bar, empty: true });
       return;
     }
-    for (const child of children) push(child, depth + 1, bar);
+    let placed = false;
+    children.forEach((child, at) => {
+      push(child, depth + 1, bar, id, at, children.length);
+      if (making && making.anchorId === String(child.id)) {
+        out.push(pending(at + 1));
+        placed = true;
+      }
+    });
+    if (making && !placed) out.push(pending(children.length));
   };
 
-  roots.forEach((root, index) => push(root, 0, index % BAR_COLOURS));
+  roots.forEach((root, at) => push(root, 0, at % BAR_COLOURS, ROOT_ID, at, roots.length));
   return out;
 }
 
@@ -864,18 +1242,27 @@ function paintHeader() {
     : t('bookmarksAddCurrentTab');
   S.add.setAttribute('aria-label', label);
   S.add.title = label;
+
+  if (S.newFolder) {
+    S.newFolder.disabled = !target;
+    const where = target
+      ? t('bookmarksNewFolderIn', [target.node.title || ''])
+      : t('bookmarksNewFolder');
+    S.newFolder.setAttribute('aria-label', where);
+    S.newFolder.title = where;
+  }
 }
 
 /**
  * Where the bookmark button writes: the folder opened most recently, which is the one
  * the reader is looking into. Chrome refuses to create anything directly under the
  * root, so a root is never the answer — but a root's own row is, once it is open.
- * @returns {{node: any, depth: number, bar: number}|null}
+ * @returns {Entry|null}
  */
 function addTargetRow() {
   if (!S.addTarget || !S.expanded.has(S.addTarget)) return null;
   return S.rows.find(
-    (row) => !row.empty && String(row.node.id) === S.addTarget && isFolder(row.node),
+    (row) => row.node && !row.empty && String(row.node.id) === S.addTarget && isFolder(row.node),
   ) || null;
 }
 
@@ -902,6 +1289,10 @@ function renderChunk() {
     disconnectObserver();
   }
   ensureRoving();
+  // These rows are new, so the previews they stand for are due a touch (bookmark-preview.js,
+  // "Keeping the pictures"). That is all this call does. It does not tell a card that its row
+  // is gone: the preview watches the list for that itself, with a MutationObserver.
+  if (S.preview) S.preview.rendered();
 }
 
 function observeSentinel() {
@@ -941,8 +1332,12 @@ function onSentinel(entries) {
   renderChunk();
 }
 
-/** @param {{node: any, depth: number, bar: number, empty?: boolean}} entry */
+/**
+ * @param {Entry} entry
+ * @param {Map<string, number>} open urlKey → the tab id already showing that page
+ */
 function buildEntry(entry, open) {
+  if (entry.pending || entry.editing) return buildEditRow(entry);
   return entry.empty ? buildEmptyMarker(entry) : buildRow(entry, open);
 }
 
@@ -952,7 +1347,7 @@ function buildEntry(entry, open) {
  * straight over it. Rendering nothing at all — which is what the first pass did — made
  * an empty folder look exactly like one whose read had failed.
  *
- * @param {{depth: number, bar: number}} entry
+ * @param {{node: any, depth: number, bar: number}} entry `node` is the folder it stands in
  * @returns {HTMLElement}
  */
 function buildEmptyMarker(entry) {
@@ -960,13 +1355,16 @@ function buildEmptyMarker(entry) {
   line.className = 'w-muted bmk-empty-row';
   line.dataset.testid = 'bookmark-folder-empty';
   line.dataset.bar = String(entry.bar);
+  // Not `data-bookmark-id`: that makes a row of it, for the keys, the clicks and the preview. A drag
+  // dropped on the line means "inside this folder", and the drag needs to know which.
+  line.dataset.emptyOf = String(entry.node.id);
   line.style.setProperty('--bmk-depth', String(Math.min(entry.depth, MAX_INDENT_LEVELS)));
   line.textContent = t('bookmarksEmpty');
   return line;
 }
 
 /**
- * @param {{node: any, depth: number, bar: number}} entry
+ * @param {{node: any, depth: number, bar: number, modifiable?: boolean}} entry
  * @param {Map<string, number>} open urlKey → the tab id already showing that page
  * @returns {HTMLElement}
  */
@@ -978,6 +1376,9 @@ function buildRow(entry, open) {
   row.className = 'w-row bmk-row';
   row.dataset.testid = 'bookmark-row';
   row.dataset.depth = String(depth);
+  // Draggable: every row that can be moved. A permanent folder (depth 0) cannot (Probe 13 P5), and a
+  // node Chrome marks `unmodifiable` is not written to. The edit row is built elsewhere and is not one.
+  if (depth > 0 && entry.modifiable === true) row.draggable = true;
   // Which of the root folders this row lives under. Two accounts synced into one
   // profile put two folders called "Bookmarks bar" side by side, and the stripe is
   // what tells one from the other.
@@ -1039,6 +1440,9 @@ function favicon(url) {
   img.height = 16;
   img.alt = '';
   img.decoding = 'async';
+  // A press on an image inside a draggable row starts the NATIVE image drag, with the page's URL and
+  // markup in it, instead of the row's own (Probe 13 P8, Probe 17 PC c).
+  img.draggable = false;
   // The same size the cards ask for, so a bookmark and its tab share one cache entry.
   const src = faviconUrl(url, FAVICON_SIZE);
   if (src) img.src = src;
@@ -1182,12 +1586,12 @@ async function openBookmark(row, background) {
   }
 }
 
-/* ── The one write ───────────────────────────────────────────────────────── */
+/* ── Bookmark the current tab ────────────────────────────────────────────── */
 
 /**
- * Save the window's active tab into the folder on screen. The ONLY write this file
- * makes; `onCreated` puts the new row on screen through the same path every other
- * change takes.
+ * Save the window's active tab into the folder on screen. The one write this file makes
+ * itself (the tree edits go through `bookmark-write.js`); `onCreated` puts the new row on
+ * screen through the same path every other change takes.
  * @returns {Promise<void>}
  */
 async function addCurrentTab() {
@@ -1215,6 +1619,430 @@ async function addCurrentTab() {
     return;
   }
   toast(t('bookmarksAddedTo', [target.node.title || '']));
+}
+
+/* ── Editing a name ──────────────────────────────────────────────────────── */
+
+/**
+ * A text field in the list in which a folder is named, or a bookmark or a folder is renamed
+ * (F2). One at a time, in `S.edit`.
+ *
+ * Nothing is written until the name is COMMITTED, not when the field opens (plan D1): Enter, or
+ * leaving the field INSIDE THE PAGE (a click on something else, Tab) with a name that is not the
+ * one it started with. Escape, an empty name and leaving it untouched write nothing. So does the
+ * window losing focus (Alt+Tab, another application): that is not the reader leaving the field, and
+ * for a rename it would write a half-typed string over the old title. The field stays open with what
+ * was typed (owner decision A, 2026-11-12: D1 reversed for the window blur only; `onEditBlur`).
+ * When the window has focus again the field is normally still the active element, and Enter, Escape
+ * or a click inside the page end the edit as usual. If something moved focus off it while the window
+ * had none, the browser sent the field no blur for that, so the window's next `focus` ends the edit
+ * as that blur would have: a changed name is written, once; an untouched or an emptied one is not
+ * (`onWindowFocus`). Closing the column or the panel with the field open writes nothing either way.
+ * Deleting is out of scope, so a folder made "to be named afterwards" and then abandoned would be
+ * left behind with nothing in this panel able to remove it. Where the plan and the criteria were
+ * silent, this file chose (the report lists them too):
+ *   - Enter on the untouched default name DOES make "New folder" (D1 says only a blur does not).
+ *     Enter on an empty name, or on a rename's unchanged title, ends the edit and writes nothing;
+ *     it does not leave the field open to be filled in.
+ *   - Focus goes back to where it was (the button that opened the field, or the row that was
+ *     being renamed) on Escape, and to the new or renamed row on Enter. After a blur it is NOT
+ *     moved: the reader has put it somewhere already, and taking it back would undo the click
+ *     that ended the edit.
+ *   - Between Enter and the answer the field stays on screen, read-only, and the hold stays: the
+ *     row that replaces it comes from the paint that follows the write.
+ *   - An Enter that belongs to an input method (a composition being confirmed) is not a commit.
+ *   - A click on the header button while a field is open: its mousedown blurs the field, which
+ *     ends that edit (a changed name is written, an untouched one is not), and the click then
+ *     opens a new field. While the write of the first is still in flight the click is ignored.
+ *   - F2 acts on a row that can be renamed: not on a permanent folder, not on a node Chrome marks
+ *     unmodifiable. On those it does nothing, and the key is not claimed (no `preventDefault`).
+ *   - The field's accessible name is "Rename" (`bookmarksRename`) in a rename and "Name"
+ *     (`bookmarksRenameField`) for a new folder, as the group-rename field says "Rename group":
+ *     the plan gives "Name" to both and "Rename" to the menu entry of a later unit, which would
+ *     leave the key unreferenced until then.
+ *
+ * Why it is a hold, and why the field is part of the model: a repaint that removed the focused
+ * field would fire `blur` inside the DOM call (Probe 16 Result 6), which is a commit, and a
+ * rebuild would also cut short an input method's composition. So while the field is open
+ * `paint()` changes nothing, and the field is an entry of `S.rows` (see `flatten`) like any
+ * other, which keeps chunking, scrolling and focus on one path.
+ *
+ * The row has no `data-bookmark-id`, no `data-bookmark-url` and no `data-tab-id`. That is what
+ * keeps `onListClick`, `onListKeyDown`, the arrow keys, the roving tabindex and the hover
+ * preview (all of which find rows by `[data-bookmark-id]`) from taking the field for a bookmark:
+ * an Enter in it must never open a page, a click in it never toggles a folder.
+ *
+ * @typedef {object} Edit
+ * @property {'create'|'rename'} mode
+ * @property {string} parentId create: the folder the new one goes into; rename: the folder the node is in
+ * @property {string|null} anchorId create: the row it goes right after; null means at the end of the folder
+ * @property {string} [id] rename: the node being renamed
+ * @property {string} [original] rename: its title as it was listed
+ * @property {string} initial the text the field started with
+ * @property {string} draft the text in the field, as last read
+ * @property {number} selStart the selection, as last read
+ * @property {number} selEnd
+ * @property {HTMLInputElement|null} input the field, once its row has been built
+ * @property {boolean} done the edit has ended; whatever its field still does is ignored
+ * @property {boolean} blurred a blur of the field was ignored because the window had no focus; the window's next `focus` decides (`onWindowFocus`)
+ * @property {{id?: string, el?: HTMLElement}|null} returnTo where focus goes back to on Escape
+ */
+
+/** @returns {{id?: string, el?: HTMLElement}|null} whatever has focus now, as a way back to it */
+function whereFocusIs() {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || active === document.body) return null;
+  return active.dataset.bookmarkId ? { id: active.dataset.bookmarkId } : { el: active };
+}
+
+/** @param {{id?: string, el?: HTMLElement}|null} back */
+function returnFocus(back) {
+  if (!back) return;
+  if (back.id) {
+    focusRowById(back.id);
+    return;
+  }
+  if (back.el && back.el.isConnected) back.el.focus();
+}
+
+/**
+ * Paint until a call of this one is the one that lands. A newer paint supersedes an older one
+ * (`paintToken`), and the caller is about to look for something that paint puts in the DOM.
+ * Bounded: external events could keep superseding it forever, and whatever repaint is
+ * scheduled catches up anyway.
+ * @returns {Promise<boolean>}
+ */
+async function paintUntilLanded() {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (await paint()) return true;
+    if (S.phase !== 'list' || S.hold.size > 0) return false;
+  }
+  return false;
+}
+
+/**
+ * Open the field for a new folder in `parentId`, after `anchorId` or at the end. The header button
+ * and the row menu of a folder name no anchor; the row menu of a bookmark names the bookmark (the
+ * new folder goes right after it).
+ * @param {string} parentId an open folder on screen, or a permanent folder
+ * @param {string|null} [anchorId]
+ * @returns {Promise<boolean>} whether the field is open
+ */
+async function beginCreate(parentId, anchorId = null) {
+  if (S.phase !== 'list' || S.edit || S.hold.size > 0) return false;
+  const folder = S.rows.find(
+    (entry) => entry.node && !entry.empty && String(entry.node.id) === parentId,
+  );
+  if (!folder || !isFolder(folder.node)) return false;
+  const name = t('bookmarksFolderDefaultName');
+  /** @type {Edit} */
+  const edit = {
+    mode: 'create',
+    parentId,
+    anchorId,
+    initial: name,
+    draft: name,
+    selStart: 0,
+    selEnd: name.length,
+    input: null,
+    done: false,
+    blurred: false,
+    returnTo: whereFocusIs(),
+  };
+  S.edit = edit;
+  // The row can only be shown inside an open folder. Opening one this way does not make it the
+  // folder the bookmark button writes into: that is a choice, and this is not one.
+  expand(parentId);
+  return showEdit(edit);
+}
+
+/**
+ * The entry of node `id` if it can be renamed: not a permanent folder (depth 0: Chrome refuses
+ * every write to those, Probe 13 P5) and not a node Chrome marks unmodifiable.
+ * @param {string} id
+ * @returns {Entry|null}
+ */
+function renamable(id) {
+  const entry = S.rows.find((row) => row.node && !row.empty && String(row.node.id) === id);
+  return entry && entry.depth > 0 && entry.modifiable ? entry : null;
+}
+
+/**
+ * Open the field in place of the row of node `id`, holding its title.
+ * @param {string} id
+ * @returns {Promise<boolean>} whether the field is open
+ */
+async function beginRename(id) {
+  if (S.phase !== 'list' || S.edit || S.hold.size > 0) return false;
+  const entry = renamable(id);
+  if (!entry) return false;
+  const title = entry.node.title || '';
+  /** @type {Edit} */
+  const edit = {
+    mode: 'rename',
+    id,
+    original: title,
+    parentId: String(entry.parentId),
+    anchorId: null,
+    initial: title,
+    draft: title,
+    selStart: 0,
+    selEnd: title.length,
+    input: null,
+    done: false,
+    blurred: false,
+    returnTo: { id },
+  };
+  S.edit = edit;
+  return showEdit(edit);
+}
+
+/**
+ * Paint the model with `edit` in it, then take the field: focus, selection, and the hold.
+ * @param {Edit} edit
+ * @returns {Promise<boolean>}
+ */
+async function showEdit(edit) {
+  await paintUntilLanded();
+  if (S.edit !== edit) return false; // the column was taken down while painting
+  const input = edit.input;
+  if (!input || !input.isConnected) {
+    // Its place is gone (the folder was removed, the read failed): there is nothing to type into.
+    S.edit = null;
+    return false;
+  }
+  holdRepaint('edit');
+  focusEdit(edit);
+  return true;
+}
+
+/** @param {Edit} edit */
+function focusEdit(edit) {
+  const input = edit.input;
+  if (!input || !input.isConnected) return;
+  try {
+    input.focus();
+    input.setSelectionRange(edit.selStart, edit.selEnd);
+  } catch (e) {
+    log.warn('bookmarks edit focus', e);
+  }
+}
+
+/**
+ * The row the field lives in: the pending row of a folder being made, or the row of the node
+ * being renamed, in the column's own indentation and stripe, with the glyphs of what it is (or
+ * is going to be), so it sits exactly where the row is and nothing moves when it is replaced.
+ * @param {Entry} entry
+ * @returns {HTMLElement}
+ */
+function buildEditRow(entry) {
+  const edit = S.edit;
+  const row = document.createElement('div');
+  row.className = 'bmk-row bmk-row--edit';
+  row.dataset.testid = 'bookmark-edit-row';
+  row.dataset.kind = 'edit';
+  row.dataset.depth = String(entry.depth);
+  row.dataset.bar = String(entry.bar);
+  row.style.setProperty('--bmk-depth', String(Math.min(entry.depth, MAX_INDENT_LEVELS)));
+  if (entry.node && !isFolder(entry.node)) {
+    row.append(favicon(entry.node.url));
+  } else {
+    // A new folder is shut; a folder being renamed keeps the state it is in (`data-open` turns
+    // the twisty, as `aria-expanded` does on a real row, which a plain `div` must not carry).
+    if (entry.node && S.expanded.has(String(entry.node.id))) row.dataset.open = '1';
+    row.append(glyph('i-chevron', 'icon bmk-row__twisty'), glyph('i-folder', 'icon bmk-row__glyph'));
+  }
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'bmk-rename';
+  input.dataset.testid = 'bookmark-rename-input';
+  // A UI limit, not Chrome's: a title of 5 000 characters is stored whole (Probe 13 P9).
+  input.maxLength = 255;
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  // Spelled out one `t('…')` at a time so the key scanners (the unit test and check_integration) see both.
+  input.setAttribute('aria-label',
+    edit && edit.mode === 'rename' ? t('bookmarksRename') : t('bookmarksRenameField'));
+  input.value = edit ? edit.draft : '';
+  input.addEventListener('input', () => {
+    if (S.edit && S.edit.input === input) S.edit.draft = input.value;
+  });
+  input.addEventListener('keydown', onEditKeyDown);
+  input.addEventListener('blur', onEditBlur);
+  row.append(input);
+  if (edit) edit.input = input;
+  return row;
+}
+
+/** @param {KeyboardEvent} event */
+function onEditKeyDown(event) {
+  const edit = S.edit;
+  if (!edit || edit.done || event.target !== edit.input) return;
+  // The Enter that confirms a composition (Japanese input) is the input method's, not ours.
+  if (event.isComposing || event.keyCode === 229) return;
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    // Only a press commits, not the auto-repeat of one. Holding Enter on a "New folder" control (the header
+    // button, the row menu's item) clicks it once, the field it opens takes focus, and the repeats of that SAME
+    // Enter then arrive here: without this they made a folder the reader never named. Swallowed (the
+    // `preventDefault` above, and no commit); the field stays open for the name.
+    if (event.repeat) return;
+    void finishEdit('enter');
+  } else if (event.key === 'Escape') {
+    // Claimed, not merely handled. `keyboard.js` answers an Escape that reaches `document` by
+    // blurring whatever has focus, and by then that is the control focus has just been handed
+    // back to. It stops at `defaultPrevented`; the `stopPropagation` is for a global handler that
+    // does not look (`context-menu.js` does both, for the same reason).
+    event.preventDefault();
+    event.stopPropagation();
+    void finishEdit('escape');
+  }
+}
+
+/**
+ * The field lost focus. When only the WINDOW lost it (Alt+Tab, another application) `document.hasFocus()` is
+ * false while this runs, and that is not the reader saying "this is the name": for a rename it would write a
+ * half-typed string over the old title. Owner decision A, 2026-11-12, which reverses plan D1 for this case only.
+ * Nothing is written: the field stays open with what was typed, and it is still `document.activeElement` when
+ * the window has focus again, unless something moved focus in between. A blur inside the page (a click on the
+ * heading or a row, Tab) is unchanged: the page has focus then, and a changed name is a commit. The signal is
+ * `hasFocus()`, not `visibilityState`: the window blur measured in probe 105 left it at 'visible'.
+ *
+ * The ignored blur is remembered (`edit.blurred`) and the window's next `focus` looks at where focus is
+ * (`onWindowFocus`), because the browser sends the field no further `blur` for a focus move made while the page
+ * has no focus (probe 105). The panel's own code can make such a move (the "focus the search box" hand-off of
+ * Alt+Shift+S calls `focusSearch()` on whatever panel document is there), and without that look nothing would
+ * ever end the edit: its repaint hold would stand for good.
+ * @param {FocusEvent} event
+ */
+function onEditBlur(event) {
+  const edit = S.edit;
+  if (!edit || edit.done || S.rebuilding || event.target !== edit.input) return;
+  if (!document.hasFocus()) {
+    edit.blurred = true;
+    window.addEventListener('focus', onWindowFocus);
+    return;
+  }
+  void finishEdit('blur');
+}
+
+/**
+ * The window has focus again (the listener exists only from an ignored blur to the end of the edit). If a blur was
+ * ignored and the field is no longer the active element, something moved focus off it while the window had none
+ * and the browser said nothing: the edit ends exactly as that blur would have (a changed name is written once, an
+ * untouched or an emptied one is not). If the field is still the active element nothing happens: it stays open
+ * with its draft, and Enter, Escape or a blur inside the page end it as usual.
+ */
+function onWindowFocus() {
+  const edit = S.edit;
+  if (!edit || edit.done || !edit.blurred || document.activeElement === edit.input) return;
+  void finishEdit('blur');
+}
+
+/**
+ * End the edit.
+ *   'enter'   write (an empty name is the write module's 'noop')
+ *   'blur'    the field was left: either a blur inside the page, or the window's next `focus`
+ *             (`onWindowFocus`), which stands in for a blur that `onEditBlur` ignored while the window had
+ *             none and after which something moved focus off the field. Write only a name that is not the
+ *             one the field started with. Both leave focus where it is.
+ *   'escape'  write nothing
+ * @param {'enter'|'blur'|'escape'} how
+ * @returns {Promise<void>}
+ */
+async function finishEdit(how) {
+  const edit = S.edit;
+  if (!edit || edit.done) return;
+  edit.done = true;
+  window.removeEventListener('focus', onWindowFocus); // an ignored blur no longer waits for the window
+  const value = edit.input ? edit.input.value : edit.draft;
+
+  /** @type {{ok: boolean, landed: any, reason: string|null}|null} */
+  let result = null;
+  if (how === 'enter' || (how === 'blur' && value !== edit.initial)) {
+    if (edit.input) edit.input.readOnly = true;
+    try {
+      // The module's `noop` is what an empty name and an unchanged rename come back as: no call.
+      result = await queue(() => (edit.mode === 'rename'
+        ? renameNode(host, { id: String(edit.id), title: value, original: edit.original })
+        : createFolder(host, { parentId: edit.parentId, title: value, anchorId: edit.anchorId })));
+    } catch (e) {
+      log.warn('bookmarks write', e);
+      result = { ok: false, landed: null, reason: 'failed' };
+    }
+    // Torn down while the write ran (the column went away, the panel closed): nothing to show.
+    if (S.edit !== edit || S.phase !== 'list') return;
+  }
+
+  S.edit = null;
+  if (!result || result.reason === 'noop') {
+    // Nothing was written. The list is patched rather than rebuilt: the blur that ends an edit
+    // fires on the MOUSEDOWN of whatever the reader clicked, and rebuilding every row would
+    // destroy the one under the pointer before its mouseup, so that click would never arrive.
+    // The same goes for a repaint that was owed while the field was open: after a press it waits
+    // for the button to come up.
+    revertEdit(edit);
+    releaseHold('edit', how === 'blur');
+  } else {
+    S.hold.delete('edit'); // the paint below is the flush
+    // 'stale' is what a create after an anchor that has gone, or has moved into another folder, answers with
+    // (`createFolder`): the row menu's "New folder" after a bookmark names that bookmark as the anchor, and it can
+    // be removed or moved while the field is open and the name is being typed. Nothing is written then.
+    // (`tests/specs/44-bookmark-robustness.spec.js` reaches this toast.)
+    if (result.reason === 'stale') toast(t('bookmarksStale'));
+    else if (result.reason === 'failed') toast(t('operationFailed'));
+    // After a blur nothing needs the rows once they are drawn, and the blur may be the mousedown of
+    // a click that is still under way: the paint waits for the button.
+    if (how === 'blur') paintAfterPress();
+    else await paintUntilLanded();
+  }
+  if (how === 'blur' || S.phase !== 'list') return;
+  if (result && result.ok && result.landed && focusRowById(result.landed.id)) return;
+  returnFocus(edit.returnTo);
+}
+
+/**
+ * Take the field out of the list and the model without touching anything else.
+ * @param {Edit} edit
+ */
+function revertEdit(edit) {
+  const fieldRow = edit.input ? edit.input.closest('.bmk-row--edit') : null;
+  if (edit.mode === 'rename') {
+    // The node is still in the model; only its row has to be drawn again, as it was.
+    const row = S.rows.find((entry) => entry.editing);
+    if (!row) {
+      if (fieldRow) fieldRow.remove();
+      return;
+    }
+    delete row.editing;
+    if (fieldRow) fieldRow.replaceWith(buildRow(row, openTabIndex()));
+    ensureRoving();
+    return;
+  }
+  const at = S.rows.findIndex((entry) => entry.pending);
+  if (at < 0) {
+    if (fieldRow) fieldRow.remove();
+    return;
+  }
+  const [gone] = S.rows.splice(at, 1);
+  // The folder it sat in is shown as empty again if the pending row was all it held: the model
+  // draws that with a marker, in the very place the field was.
+  const before = S.rows[at - 1];
+  if (before && before.node && !before.empty && String(before.node.id) === gone.parentId) {
+    const marker = { node: before.node, depth: gone.depth, bar: gone.bar, empty: true };
+    S.rows.splice(at, 0, marker);
+    if (fieldRow) fieldRow.replaceWith(buildEmptyMarker(marker));
+    return;
+  }
+  if (fieldRow) fieldRow.remove();
+  if (at < S.rendered) S.rendered -= 1;
+}
+
+/** The header button: a folder in the folder opened last. */
+function onNewFolderClick() {
+  const target = addTargetRow();
+  if (target) void beginCreate(String(target.node.id));
 }
 
 /* ── Pointer ─────────────────────────────────────────────────────────────── */
@@ -1260,6 +2088,9 @@ function rowFrom(target) {
 function onListKeyDown(event) {
   const row = rowFrom(event.target);
   if (!row || !S.list) return;
+  // Before the plain arrows below: Alt+ArrowDown is "move this row down", not "focus the next one".
+  // The name field is not a row (`rowFrom` found none for it), so none of this reaches it.
+  if (S.menu && S.menu.onKey(event, row)) return;
   const rows = /** @type {HTMLElement[]} */ ([...S.list.querySelectorAll('[data-bookmark-id]')]);
   const index = rows.indexOf(row);
 
@@ -1307,6 +2138,16 @@ function onListKeyDown(event) {
       if (next && Number(next.dataset.depth || '0') > Number(row.dataset.depth || '0')) {
         focusRow(next);
       }
+      return;
+    }
+    // Rename. Plain F2 only, and only on a row that can be renamed: on a permanent folder (or a
+    // managed bookmark) it does nothing at all, so the key is not claimed either.
+    case 'F2': {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      const id = row.dataset.bookmarkId || '';
+      if (!renamable(id)) return;
+      event.preventDefault();
+      void beginRename(id);
       return;
     }
     case 'Enter':
@@ -1431,7 +2272,7 @@ function bindBookmarkEvents() {
     return id === ROOT_ID || S.expanded.has(id);
   };
   /** @param {unknown} id whether the row itself is rendered */
-  const touchesRow = (id) => S.rows.some((row) => String(row.node.id) === String(id));
+  const touchesRow = (id) => S.rows.some((row) => row.node && String(row.node.id) === String(id));
 
   /** @type {Array<[any, Function]>} */
   const wanted = [];

@@ -476,6 +476,172 @@ function schemeOf(url) {
   }
 }
 
+/* ── For a caller that has a URL and no tab: the bookmark column ─────────────
+   Everything from here to `peekUrl()` is used by the bookmark column's hover preview and by
+   nothing else; the tab path above does not call any of it. */
+
+/**
+ * `{ ctx, answer }`: the answer `probeIncognitoStrict()` is holding, for the `ctx` it was
+ * asked under. `init()` makes a new `ctx` object every time, so this is forgotten exactly
+ * when `incognitoProbe` is, without `init()` having to know about it.
+ * @type {{ ctx: object, answer: Promise<boolean|null> }|null}
+ */
+let strictProbe = null;
+
+/**
+ * "Is this panel in a private window?", asked the way the bookmark column has to ask it.
+ *
+ * `probeIncognito()` answers `false` when the question fails, which is right for the tab
+ * path: every tab carries its own `incognito` flag, and `stateFor()` step 2 checks it, so a
+ * failure here cannot put a normal-session picture on a private tab's card. A bookmark has
+ * no such flag, so this is the ONLY signal between a private window and the normal
+ * profile's pictures, and when it cannot be had the safe answer is "do not know" — `null`,
+ * which the callers treat as "show and keep nothing". A failed answer is not remembered, so
+ * the next hover asks again; a real one is, as for `probeIncognito()`.
+ *
+ * Reads the same `isIncognitoWindow` seam as `probeIncognito()`.
+ * @returns {Promise<boolean|null>} `null` when it could not be told
+ */
+function probeIncognitoStrict() {
+  const asked = ctx;
+  if (strictProbe && strictProbe.ctx === asked) return strictProbe.answer;
+  const answer = (async () => {
+    try {
+      if (typeof asked.isIncognitoWindow === 'function') return Boolean(asked.isIncognitoWindow());
+      const win = await chrome.windows.getCurrent();
+      // `incognito` is a boolean on every real Window; anything else is not an answer.
+      if (!win || typeof win.incognito !== 'boolean') throw new Error('windows.getCurrent gave no `incognito`');
+      return win.incognito;
+    } catch (e) {
+      log.warn(
+        'thumbs: cannot tell whether this is a private window, so the bookmark preview reads and keeps nothing',
+        e,
+      );
+      return null;
+    }
+  })();
+  const held = { ctx: asked, answer };
+  strictProbe = held;
+  void answer.then((value) => {
+    if (value === null && strictProbe === held) strictProbe = null;
+  });
+  return answer;
+}
+
+/**
+ * `classifyUrl()` for a bare URL, with the inputs `stateFor()` step 3 and the service
+ * worker's capture gate use. `peekUrl()` and `keysToKeep()` both go through it, so what is
+ * shown and what is kept can never disagree about which URLs are private.
+ * @param {string} url
+ * @returns {'ok'|'restricted'|'excluded'}
+ */
+function classifyForPeek(url) {
+  const settings = ctx.getSettings() || {};
+  return classifyUrl(url, {
+    excludedHosts: settings.excludedHosts || [],
+    fileAccess: Boolean(ctx.getFileAccess()),
+    ownOrigin: ctx.ownOrigin,
+  });
+}
+
+/**
+ * Which of these bookmark URLs' stored previews may be marked as recently used, so the
+ * maintenance prune (which keeps only open tabs' and anything used in the last 14 days) does
+ * not take a bookmarked page's picture away?
+ *
+ * The answer is the keys of every URL that `peekUrl()` would be willing to READ: not in a
+ * private window, not when that cannot be told, and not a URL the exclusion list covers.
+ * That is not a nicety. `thumb-store.touch()` reads each record — blob included — into this
+ * document, and writes it back when its stamp is older than `TOUCH_FRESH_MS`, so the promise
+ * made for the hover ("a record of the normal profile, or of an excluded host, is never read
+ * into this document") has to hold for the refresh as well: the read happens whether or not
+ * the write does. A URL with no stored record costs nothing either way: `touch()` does
+ * nothing for a key that is not there.
+ *
+ * @param {string[]} urls
+ * @returns {Promise<string[]>} urlKeys, de-duplicated
+ */
+export async function keysToKeep(urls) {
+  if ((await probeIncognitoStrict()) !== false) return [];
+  const keys = new Set();
+  for (const url of urls || []) {
+    const key = urlKey(url);
+    if (key && classifyForPeek(url) !== 'excluded') keys.add(key);
+  }
+  return [...keys];
+}
+
+/**
+ * What is known about the screenshot of a bare URL, for a caller that has no tab: the
+ * bookmark column's hover preview. It answers with the SAME stored picture a tab card on
+ * that URL would show, and with the same reasons when there is none.
+ *
+ * READ-ONLY, and that is the contract. It never writes `cache`, `byTab`, `cards`, `failed`
+ * or `asked`, never takes an object URL and never asks for a capture. The cache matters
+ * most: it is bounded, so an entry put there for a bookmark would be one more candidate
+ * for `evictIfNeeded()`, which drops unreferenced entries — and a tab card whose entry is
+ * evicted reads `empty` again. A lookup for a page that is not open therefore goes to
+ * IndexedDB and stops there.
+ *
+ * The verdict order is `stateFor()`'s, minus the steps only a tab can reach (a failure
+ * reported for the tab, the previous page it showed, a capture in flight):
+ *   incognito → excluded → a stored record → restricted → policy → no-access → none
+ * Both privacy verdicts come BEFORE the read, so a record belonging to an excluded host,
+ * or to the normal profile while this panel sits in an incognito window, is never even
+ * read into this document. A page with a key but no record is `restricted` only when the
+ * URL could never be captured, otherwise `none`: "no stored preview".
+ *
+ * Unlike a tab card there is no per-tab `incognito` flag to fall back on, so when the
+ * window cannot be identified (see `probeIncognitoStrict()`) the verdict is `none` and
+ * nothing is read: the bookmark side fails closed where `probeIncognito()` fails open.
+ *
+ * @param {string} url
+ * @returns {Promise<{ state: 'incognito'|'excluded'|'loaded'|'restricted'|'policy'|'no-access'|'none',
+ *                     key: string|null, tooltipKey: string, blob: Blob|null,
+ *                     avgColor: number[]|null }>}
+ */
+export async function peekUrl(url) {
+  const key = urlKey(url);
+  const make = (state, record = null) => ({
+    state,
+    key,
+    tooltipKey: STATE_INFO[state] ? STATE_INFO[state].tooltip : '',
+    blob: record && record.blob ? record.blob : null,
+    avgColor: record && Array.isArray(record.avgColor) ? record.avgColor : null,
+  });
+
+  // Same reasoning as stateFor() step 2, and the flag `loadFor()` and `refresh()` already
+  // honour: the hosting window is the only signal that says "private window". It is asked
+  // through `probeIncognitoStrict()`, which does not turn a failed answer into "normal".
+  const incognito = await probeIncognitoStrict();
+  if (incognito === true) return make('incognito');
+  if (incognito === null) return make('none');
+
+  const cls = classifyForPeek(url);
+  if (key && cls === 'excluded') {
+    return make(urlKeyMod.isOwnPanelUrl(url) || isOwnExtensionUrl(url) ? 'restricted' : 'excluded');
+  }
+
+  if (key) {
+    // Reading `cache` is free and returns the very blob a card on this URL is showing.
+    const held = cache.get(key);
+    let record = held && held.blob ? { blob: held.blob, avgColor: held.avgColor } : null;
+    if (!record) {
+      try {
+        record = await getThumbFn(key);
+      } catch (e) {
+        log.warn('thumbs peekUrl', e);
+      }
+    }
+    if (record && record.blob) return make('loaded', record);
+  }
+
+  if (key && cls === 'restricted') return make('restricted');
+  if (ctx.isPolicyActive()) return make('policy');
+  if (ctx.getHostAccess() === false && /^https?:$/.test(schemeOf(url))) return make('no-access');
+  return make('none');
+}
+
 /**
  * Apply the computed state to a card. Idempotent — safe to call on every render.
  * @param {Element} cardEl
@@ -822,7 +988,14 @@ export async function onTabAdded(tab) {
 /** @param {number} tabId */
 export function onTabRemoved(tabId) {
   const cardEl = cards.get(tabId);
-  if (cardEl) release(cardEl.dataset.thumbKey || null);
+  if (cardEl) {
+    release(cardEl.dataset.thumbKey || null);
+    // `thumbKey` is the card's record of the one reference it holds. render.js unobserve()s this
+    // same element on its next pass and releases whatever the marker still names, so leaving it set
+    // gave the entry back twice. Entries are shared per URL: the second release was the surviving
+    // twin's, which left it showing an image the cache no longer counted.
+    delete cardEl.dataset.thumbKey;
+  }
   cards.delete(tabId);
   byTab.delete(tabId);
   failed.delete(tabId);

@@ -51,10 +51,18 @@ async function launchExtensionContext(options = {}) {
   if (env) launchOptions.env = env;
 
   const context = await chromium.launchPersistentContext('', launchOptions);
-  let [sw] = context.serviceWorkers();
-  if (!sw) sw = await context.waitForEvent('serviceworker', { timeout: 30_000 });
-  const extensionId = sw.url().split('/')[2];
-  return { context, serviceWorker: sw, extensionId };
+  // The wait below can time out with the browser already up. Returning the error without
+  // closing leaves a Chromium behind for the rest of the run, which on a loaded machine
+  // is how one slow launch turns into several.
+  try {
+    let [sw] = context.serviceWorkers();
+    if (!sw) sw = await context.waitForEvent('serviceworker', { timeout: 30_000 });
+    const extensionId = sw.url().split('/')[2];
+    return { context, serviceWorker: sw, extensionId };
+  } catch (err) {
+    await context.close().catch(() => {});
+    throw err;
+  }
 }
 
 const test = base.extend({

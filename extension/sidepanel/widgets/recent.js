@@ -41,8 +41,19 @@ export const recentTabs = {
     body.append(note, list);
 
     let alive = true;
+    // Rising counter that makes a superseded paint drop its result, the same guard
+    // bookmarks.js uses as `S.paintToken`. `paint` is async and is fired from two
+    // sources — `tabs.onActivated` and the panel's `rendered` event — so two runs can
+    // overlap, and without this the SLOWER one writes last. That leaves an older list
+    // on screen permanently: nothing fires again, so nothing corrects it. The race is
+    // measured, not inferred: without this guard the recently-used ordering assertion
+    // fails on the same tab and in the same direction as the suite flake it was found
+    // chasing (probe-results.md, Probe 9 — which stops short of claiming the guard
+    // cures that flake, and so does this comment).
+    let paintToken = 0;
 
     const paint = async () => {
+      const token = (paintToken += 1);
       // Not the panel's model: its tab objects are the snapshot `tabs.query` returned,
       // and `lastAccessed` moves every time the reader looks at a tab without any event
       // the panel subscribes to. Reading it here was measured returning the order tabs
@@ -52,9 +63,17 @@ export const recentTabs = {
         tabs = await chrome.tabs.query({ windowId: ops.windowId() });
       } catch (e) {
         log.warn('recent query', e);
+        // The token was claimed before the read, so leaving it claimed would make a
+        // paint that is still in flight — one whose read SUCCEEDED — throw its result
+        // away, and nothing re-fires. That is the same permanent-stale screen this
+        // guard exists to prevent, arrived at from the other side. Hand the claim back,
+        // but only while it is still ours: if a newer paint has taken it, restoring
+        // would invalidate that newer paint instead.
+        if (paintToken === token) paintToken = token - 1;
         return;
       }
-      if (!alive) return;
+      // After the await, before any write.
+      if (!alive || token !== paintToken) return;
 
       if (!tabs.some((tab) => typeof tab.lastAccessed === 'number')) {
         note.textContent = t('widgetRecentUnsupported');

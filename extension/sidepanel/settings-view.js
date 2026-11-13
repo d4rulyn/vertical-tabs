@@ -21,6 +21,7 @@ import {
   REPOSITORY_URL,
 } from '../common/constants.js';
 import * as ops from './tab-ops.js';
+import { getWidget } from './widgets.js';
 import { t, toast, confirmBar } from './toast.js';
 
 const MSG = ops.MSG;
@@ -47,7 +48,8 @@ let textTimer = 0;
 /**
  * @typedef {Object} Row
  * @property {string} key
- * @property {'select'|'checkbox'|'number'|'textarea'} type
+ * @property {'select'|'checkbox'|'number'|'textarea'|'widget'} type
+ * @property {string} [widgetId] for `widget` rows: which tool the tick turns on
  * @property {string} labelKey
  * @property {string} [helpKey]
  * @property {[string, string][]} [options] `[value, i18nKey]`
@@ -56,7 +58,7 @@ let textTimer = 0;
  * @property {number} [max]
  */
 
-/** @type {{ titleKey: string, rows: Row[] }[]} */
+/** @type {{ titleKey: string, helpKey?: string, rows: Row[] }[]} */
 const SECTIONS = [
   {
     titleKey: 'settingsAppearance',
@@ -100,7 +102,7 @@ const SECTIONS = [
     // handing `widgets.apply()` a DERIVED empty list — `widgets` below is never
     // rewritten, so the ticks here survive the round trip.
     titleKey: 'settingsSideColumn',
-    helpKey: 'settingsWidgetsHelp',
+    helpKey: 'settingsSideColumnHelp',
     rows: [
       {
         key: 'railMode',
@@ -112,11 +114,21 @@ const SECTIONS = [
           ['bookmarks', 'railModeBookmarks'],
         ],
       },
+      // Each tick is named by the tool itself. Building the key from the id instead —
+      // "widget" plus the capitalised id — is how widgetStaleTabs shipped: the staleTabs
+      // widget is titled widgetStale, so the built key existed in no locale and the
+      // checkbox read its own key. Reading titleKey makes the row and the tool's heading
+      // the same string by construction, with nothing left to keep in step.
       ...WIDGET_IDS.map((id) => ({
         key: `widget-${id}`,
         type: 'widget',
         widgetId: id,
-        labelKey: `widget${id.charAt(0).toUpperCase()}${id.slice(1)}`,
+        // Falls back to the id, not to '', and deliberately matches tool-strip.js:
+        // t('') returns '' before i18n.js can warn about a missing key, so a tool that
+        // is in WIDGET_IDS but missing from the registry would ship a tick with no
+        // label and no accessible name, and nothing in the console. The id is ugly and
+        // findable, which is what a fallback is for.
+        labelKey: getWidget(id)?.titleKey || id,
       })),
     ],
   },
@@ -352,7 +364,15 @@ function build() {
 }
 
 /**
- * @param {{ titleKey: string, rows: Row[] }} section
+ * A section's own `helpKey` describes the group; a row's describes that one control.
+ * Both render as `.drawer__help`, which is not scoped to `.drawer__row` and so is at
+ * home in either place. Inside a wrapped row its `flex-basis: 100%` is what pushes it
+ * onto its own line; directly under `.drawer__section`, which is a flex COLUMN, that
+ * basis is a height and does nothing, and the full width comes from the default
+ * `align-items: stretch`. `.drawer__stats` and `.drawer__version` already sit there the
+ * same way.
+ *
+ * @param {{ titleKey: string, helpKey?: string, rows: Row[] }} section
  * @returns {HTMLElement}
  */
 function buildSection(section) {
@@ -363,6 +383,12 @@ function buildSection(section) {
   title.className = 'drawer__section-title';
   title.textContent = t(section.titleKey);
   el.appendChild(title);
+  if (section.helpKey) {
+    const help = document.createElement('p');
+    help.className = 'drawer__help';
+    help.textContent = t(section.helpKey);
+    el.appendChild(help);
+  }
   for (const row of section.rows) el.appendChild(buildRow(row));
   return el;
 }

@@ -606,9 +606,9 @@
     "message": "Tools",
     "description": "Aria label for the widget rail"
   },
-  "settingsWidgetsHelp": {
-    "message": "Chrome will not let the panel be narrower than 360 px, so the space beside the tabs holds these instead. None of them uses the network. Untick them all to hide the column.",
-    "description": "Help text under the widget list"
+  "settingsSideColumnHelp": {
+    "message": "Chrome will not let the panel be narrower than 360 px, so the space beside the tabs is put to use here. Nothing in this column reaches the network. With Tools chosen, unticking every one of them hides the column.",
+    "description": "Help text under the side-column section heading"
   },
   "settingsSideColumn": {
     "message": "Side column",
@@ -640,7 +640,7 @@
   },
   "railSwitchToTools": {
     "message": "Show tools instead",
-    "description": "Label on the control that switches the side column back to tools"
+    "description": "Tooltip on the topbar toggle while the side column shows the bookmarks. Names the action, not the state."
   },
   "toolStrip": {
     "message": "Tools",
@@ -729,11 +729,71 @@
   },
   "bookmarksAddCurrentTab": {
     "message": "Bookmark this tab",
-    "description": "The one write the bookmark rail performs"
+    "description": "Header button that bookmarks the current tab: its tooltip and accessible name while no folder is open to put the tab in (with one open it names the folder, bookmarksAddTo)."
+  },
+  "bookmarksNewFolder": {
+    "message": "New folder",
+    "description": "Header button that makes a folder: its tooltip and accessible name while no folder is open to put the new one in (with one open it names the folder, bookmarksNewFolderIn)."
+  },
+  "bookmarksNewFolderIn": {
+    "message": "New folder in “$FOLDER$”",
+    "description": "Tooltip and accessible name of the header button that makes a folder, while a folder is open. $FOLDER$ is the folder the reader opened last, which is where the new one will go.",
+    "placeholders": {
+      "folder": {
+        "content": "$1",
+        "example": "Reading"
+      }
+    }
+  },
+  "bookmarksFolderDefaultName": {
+    "message": "New folder",
+    "description": "The name a new folder carries in its text field before the reader types one. It is selected, so typing replaces it."
+  },
+  "bookmarksRename": {
+    "message": "Rename",
+    "description": "Accessible name of the text field in which a bookmark or a folder is renamed (it opens on F2)."
+  },
+  "bookmarksRenameField": {
+    "message": "Name",
+    "description": "Accessible name of the text field in which a new folder is named."
+  },
+  "bookmarksStale": {
+    "message": "The bookmarks changed while you were working, so nothing was changed.",
+    "description": "Toast when an edit found that the place it pointed at had changed underneath it (the bookmark it was to follow is gone, say), and so made no change."
+  },
+  "bookmarksMoveUp": {
+    "message": "Move up",
+    "description": "Item of the menu of a bookmark or a folder in the bookmark column: puts it one place higher in its folder. Disabled for the first one."
+  },
+  "bookmarksMoveDown": {
+    "message": "Move down",
+    "description": "Item of the menu of a bookmark or a folder in the bookmark column: puts it one place lower in its folder. Disabled for the last one."
+  },
+  "bookmarksMoveTo": {
+    "message": "Move to…",
+    "description": "Item of the menu of a bookmark or a folder in the bookmark column that opens the list of folders it can be moved into. The ellipsis says that a choice follows."
+  },
+  "bookmarksMovedTo": {
+    "message": "Moved to position $POS$ of $TOTAL$",
+    "description": "Toast after a bookmark or a folder was moved with the keyboard or the menu, so that a screen reader says where it is now. $POS$ is its place counting from 1, $TOTAL$ how many items its folder holds.",
+    "placeholders": {
+      "pos": {
+        "content": "$1",
+        "example": "3"
+      },
+      "total": {
+        "content": "$2",
+        "example": "5"
+      }
+    }
   },
   "bookmarksAlreadyOpen": {
     "message": "That page is already open",
     "description": "Shown when a bookmark's page is open in a tab already"
+  },
+  "bookmarkPreviewNone": {
+    "message": "No saved preview for this page.",
+    "description": "Line on the hover card of a bookmark whose address has no screenshot stored. It says only that none is stored, and does not promise one will appear: a preview is taken of a page that is on screen in a tab and is kept under that tab's address, so a page that is never opened, or that opens at a different address than the bookmark's (a redirect, a changed query or #fragment), can stay without one."
   },
   "widgetListIO": {
     "message": "List in and out",
@@ -1245,10 +1305,6 @@
   "widgetStale": {
     "message": "Idle tabs",
     "description": "widgetStale (widget)"
-  },
-  "widgetStaleTabs": {
-    "message": "Idle tabs",
-    "description": "widgetStaleTabs (settings) — the drawer derives this key from the widget id `staleTabs`, so it must exist alongside widgetStale and say the same thing"
   },
   "widgetStaleNone": {
     "message": "Nothing has gone idle",

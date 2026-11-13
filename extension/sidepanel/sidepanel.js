@@ -416,6 +416,7 @@ async function loadFeatureModules() {
     ['search', './search.js'],
     ['keyboard', './keyboard.js'],
     ['contextMenu', './context-menu.js'],
+    ['groupClose', './group-close.js'],
     ['dnd', './dnd.js'],
     ['trash', './trash.js'],
     ['settingsView', './settings-view.js'],
@@ -589,9 +590,11 @@ function registerUi() {
 
   if (el.btnRailMode) {
     el.btnRailMode.addEventListener('click', () => {
-      // Written to storage rather than to a local copy, the way the strip's own toggle
-      // does it: `storage.onChanged` is what tells the rail, the strip and the drawer
-      // at once, in every panel that is open.
+      // Written to storage rather than to a local copy: `storage.onChanged` is what
+      // tells the rail, the strip and the drawer at once, in every panel that is open.
+      // The sheet is already closed by then — `onDocumentPointerDown` saw this very
+      // press, and `widgets.apply()` tears the sheet's copy down before building the
+      // rail's either way (specs 32:459 and 32:505).
       const next = state.state.settings.railMode === 'bookmarks' ? 'tools' : 'bookmarks';
       void saveSettings({ railMode: next }).catch((e) => log.warn('railMode', e));
     });

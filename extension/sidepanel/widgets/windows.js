@@ -42,16 +42,24 @@ export const windowList = {
     body.append(alone, list);
 
     let alive = true;
+    // See recent.js. The debounce below coalesces SCHEDULING, not execution: a paint
+    // that outlives the debounce interval still overlaps the next one, and the loser
+    // would write last.
+    let paintToken = 0;
 
     const paint = async () => {
+      const token = (paintToken += 1);
       let windows = [];
       try {
         windows = await chrome.windows.getAll({ populate: true, windowTypes: ['normal'] });
       } catch (e) {
         log.warn('windows list', e);
+        // See recent.js: releasing the claim keeps a failed read from invalidating a
+        // successful one that is still in flight. Only while the claim is still ours.
+        if (paintToken === token) paintToken = token - 1;
         return;
       }
-      if (!alive) return;
+      if (!alive || token !== paintToken) return;
 
       const here = ops.windowId();
       list.textContent = '';

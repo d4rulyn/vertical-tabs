@@ -260,7 +260,12 @@ export async function openForTab(tabId, x, y) {
  */
 export function openForGroup(groupId, x, y) {
   const group = ops.groups().get(groupId);
-  const tabIds = tabIdsOfGroup(groupId);
+  // Whether an item is OFFERED is decided here, when the menu opens. WHICH tabs "Ungroup" and
+  // "Close group" act on is decided when the item is clicked (`tabIdsOfGroup(groupId)` inside
+  // `run`), as the card menu's "Close group" does: a tab that joined, left or moved to another
+  // group while the menu was open is then treated as the group is at the click (spec-addendum
+  // A38). Ids taken here would close a tab that has left the group and miss one that joined.
+  const hasTabs = tabIdsOfGroup(groupId).length > 0;
   const collapsed = group ? group.collapsed === true : false;
 
   /** @type {MenuItem[]} */
@@ -272,8 +277,8 @@ export function openForGroup(groupId, x, y) {
       ? { id: 'group-expand', label: t('groupExpand'), run: () => ops.updateGroup(groupId, { collapsed: false }) }
       : { id: 'group-collapse', label: t('groupCollapse'), run: () => ops.updateGroup(groupId, { collapsed: true }) },
     { separator: true },
-    { id: 'group-ungroup', label: t('groupUngroup'), disabled: tabIds.length === 0, run: () => ops.ungroup(tabIds) },
-    { id: 'group-close', label: t('closeGroup'), disabled: tabIds.length === 0, run: () => closeTabs(tabIds) },
+    { id: 'group-ungroup', label: t('groupUngroup'), disabled: !hasTabs, run: () => ungroupGroup(groupId) },
+    { id: 'group-close', label: t('closeGroup'), disabled: !hasTabs, run: () => closeTabs(tabIdsOfGroup(groupId)) },
   ];
   openMenu(items, x, y);
 }
@@ -453,7 +458,7 @@ function isId(value) {
  * @param {number} groupId
  * @returns {number[]}
  */
-function tabIdsOfGroup(groupId) {
+export function tabIdsOfGroup(groupId) {
   return ops
     .tabsInOrder()
     .filter((tab) => tab.groupId === groupId)
@@ -519,6 +524,16 @@ export async function closeTabs(tabIds) {
     if (!ok) return;
   }
   await ops.remove(ids);
+}
+
+/**
+ * "Ungroup" on a group header: the members the group has NOW (see `openForGroup`).
+ * @param {number} groupId
+ */
+async function ungroupGroup(groupId) {
+  const ids = tabIdsOfGroup(groupId);
+  if (ids.length === 0) return;
+  await ops.ungroup(ids);
 }
 
 /**

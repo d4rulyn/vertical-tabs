@@ -5,7 +5,7 @@
 
 const { test, expect } = require('../fixtures');
 const {
-  swEval, setSettings, keyOf, waitForThumb, thumbStats, shot,
+  swEval, setSettings, keyOf, waitForThumb, getThumb, thumbStats, shot,
 } = require('../helpers/chrome');
 
 async function gridTrackCount(panel) {
@@ -289,13 +289,105 @@ test('the settings drawer opens and the preview cache can be cleared',
       .not.toHaveClass(/thumb--loaded/, { timeout: 15_000 });
   });
 
+/* S15 (spec-addendum A39, "Known, not changed", item 9). The button above sends the message itself; this is the
+ * button. "Clear preview cache" asks "Delete all saved previews?" in #confirm-bar, and the settings drawer is a layer
+ * over the whole panel (`position: fixed; inset: 0`), so the bar is an answer only if it is stacked ABOVE the drawer. It
+ * was not (bar 65, drawer 70): the question was drawn under the drawer and a click at Cancel or OK landed on the drawer.
+ * Only the keyboard could answer it (spec 42, section 16, does).
+ *
+ * The clicks are real pointer events at the buttons' own coordinates and never `force`d, so Playwright's hit test
+ * fails them when something else is on top. Before them, `elementFromPoint` names what IS on top, so a regression
+ * fails by assertion, quickly and with the culprit named, instead of by a click retried until the test times out. */
+test('the clear-cache question in the settings drawer can be answered with the mouse: Cancel keeps the previews, Delete deletes them',
+  async ({ harness, serviceWorker }) => {
+    test.setTimeout(150_000);
+    const { panel, tabIds, urls } = harness;
+    await setSettings(serviceWorker, { refreshInterval: 'off', columns: 1 });
+    await panel.setViewportSize({ width: 360, height: 900 });
+
+    // "Kept" and "deleted" can only be told apart if something is in the cache.
+    const alphaKey = await keyOf(panel, urls.alpha);
+    await swEval(serviceWorker, (id) => chrome.tabs.update(id, { active: true }), tabIds.alpha);
+    await waitForThumb(panel, alphaKey, { timeout: 40_000 });
+    expect((await thumbStats(panel)).count).toBeGreaterThanOrEqual(1);
+
+    // Counts the requests that delete the previews. A Cancel that answered "yes" sends one in the same task as the
+    // click (the continuation of `await confirmBar` is a microtask), before the store empties, so this is read
+    // without waiting and the stored record is read next to it.
+    await panel.evaluate(() => {
+      const real = chrome.runtime.sendMessage.bind(chrome.runtime);
+      window.__clearRequests = 0;
+      chrome.runtime.sendMessage = (message, ...rest) => {
+        if (message && message.type === 'vt/clear-thumbs') window.__clearRequests += 1;
+        return real(message, ...rest);
+      };
+    });
+    const clearRequests = () => panel.evaluate(() => window.__clearRequests);
+
+    await panel.locator('[data-testid="settings-button"]').click();
+    const view = panel.locator('[data-testid="settings-view"]');
+    await expect(view).toBeVisible({ timeout: 10_000 });
+    const bar = panel.locator('[data-testid="confirm-bar"]');
+    const cancel = bar.locator('[data-testid="confirm-cancel"]');
+    const ok = bar.locator('[data-testid="confirm-ok"]');
+
+    const ask = async () => {
+      await view.locator('[data-testid="settings-clear-cache"]').click();
+      await expect(bar, 'the clear-cache button must ask its question in the confirm bar').toBeVisible();
+    };
+    // What the browser puts on top at the centre of each button, and whether that is the button (or inside it).
+    const hitTest = () => panel.evaluate(() => {
+      const describe = (el) => (el
+        ? `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${el.classList.length ? `.${[...el.classList].join('.')}` : ''}`
+        : 'nothing');
+      const at = (testid) => {
+        const button = document.querySelector(`#confirm-bar [data-testid="${testid}"]`);
+        const box = button.getBoundingClientRect();
+        const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return { isButton: Boolean(top && button.contains(top)), top: describe(top) };
+      };
+      return { cancel: at('confirm-cancel'), ok: at('confirm-ok') };
+    });
+    const expectBarOnTop = async () => {
+      const hit = await hitTest();
+      expect(hit.cancel.isButton,
+        `the bar's Cancel button is covered: what is on top at its centre is ${hit.cancel.top}`).toBe(true);
+      expect(hit.ok.isButton,
+        `the bar's Delete button is covered: what is on top at its centre is ${hit.ok.top}`).toBe(true);
+    };
+
+    // Cancel, with Playwright's own actionability checks (visible, stable, and the click must reach the button).
+    await ask();
+    await expectBarOnTop();
+    await shot(panel, '08-clear-cache-question-over-drawer.png');
+    await cancel.click();
+    await expect(bar, 'a click on Cancel did not close the bar').toBeHidden();
+    expect(await clearRequests(), 'Cancel sent the request that deletes the previews').toBe(0);
+    expect(await getThumb(panel, alphaKey), 'Cancel deleted the saved preview').not.toBeNull();
+    await expect(view, 'answering the question must not close the drawer').toBeVisible();
+
+    // Delete, as a bare click at the button's coordinates: no hit test of Playwright's in between.
+    await ask();
+    await expectBarOnTop();
+    const box = await ok.boundingBox();
+    await panel.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(bar, 'a click on Delete did not close the bar').toBeHidden();
+    await expect.poll(clearRequests, { message: 'Delete did not send the request that deletes the previews' }).toBe(1);
+    await expect.poll(async () => (await thumbStats(panel)).count, {
+      message: 'the previews are still in the cache after Delete', timeout: 15_000,
+    }).toBe(0);
+    expect(await getThumb(panel, alphaKey), 'Delete left the saved preview').toBeNull();
+    await expect(view, 'answering the question must not close the drawer').toBeVisible();
+  });
+
 /* Every label in the drawer comes from `t(key)`, and `t()` returns the bare key when the
- * locale does not define it (common/i18n.js). Three of the drawer's keys are not written
- * out but derived from data — the widget ids, the column choices and the card widths — and
- * a template literal is invisible to both static scans, so `widgetStaleTabs` shipped
- * undefined and its checkbox read "widgetStaleTabs" in the released extension. The unit
- * tests now compare the derived keys against _locales; this is the same claim checked
- * where it matters, on the drawer Chromium actually rendered. */
+ * locale does not define it (common/i18n.js). Two of the drawer's keys are not written out
+ * but derived from data — the column choices and the card widths — and a template literal is
+ * invisible to both static scans. The widget ticks were a third, which is how
+ * `widgetStaleTabs` shipped undefined and its checkbox read "widgetStaleTabs" in the released
+ * extension; those rows now carry the tool's own titleKey instead. The unit tests check the
+ * derived keys against _locales; this is the same claim checked where it matters, on the
+ * drawer Chromium actually rendered. */
 test('no control in the settings drawer is labelled with a raw i18n key', async ({ harness }) => {
   const { panel } = harness;
 
@@ -320,4 +412,30 @@ test('no control in the settings drawer is labelled with a raw i18n key', async 
       .not.toMatch(/^[a-z][A-Za-z0-9]{2,}$/);
     expect(text.length, `an empty label in ${where}`).toBeGreaterThan(0);
   }
+});
+
+/* A section may carry a `helpKey` of its own, describing the group rather than one control.
+ * `buildSection()` did not render it: the side-column section had named one since the rail
+ * was built and it had never once appeared on screen. The distinction this asserts is where
+ * the paragraph sits — a row's help is inside `.drawer__row`, a section's is a direct child
+ * of the section — because rendering it in the wrong place is the way to pass by accident. */
+test("the side column's section help is on screen, not just in the table", async ({ harness }) => {
+  const { panel } = harness;
+
+  await panel.locator('[data-testid="settings-button"]').click();
+  await expect(panel.locator('[data-testid="settings-view"]')).toBeVisible({ timeout: 10_000 });
+
+  const section = panel.locator('[data-testid="settings-view"] [data-section="settingsSideColumn"]');
+  await expect(section).toHaveCount(1);
+
+  const sectionHelp = section.locator(':scope > .drawer__help');
+  await expect(sectionHelp).toHaveCount(1);
+  // "360 px" is the one figure both locales state, so this pins the text without pinning
+  // a language: it is settingsSideColumnHelp that rendered, not some other paragraph.
+  // 360 is in both locales, so this does not depend on which one rendered. It is NOT
+  // unique to this string — settingsCardWidthHelp says 360 px too — so the `:scope >`
+  // above is what actually pins WHICH help this is; this only pins that it is the right
+  // text rather than an empty paragraph.
+  await expect(sectionHelp).toHaveText(/360/);
+  await expect(sectionHelp).toBeVisible();
 });

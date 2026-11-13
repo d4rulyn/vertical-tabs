@@ -45,6 +45,13 @@ const REQUIRED_KEYS = [
   'timeJustNow', 'timeMinutesAgo', 'timeHoursAgo', 'timeDaysAgo',
   'welcomeTitle', 'welcomeOpen', 'welcomeOpenNow', 'welcomePin', 'welcomeSide',
   'welcomeChromeVerticalTabs', 'welcomePermissions', 'welcomeSettings',
+  // The bookmark column's hover preview, for a bookmark whose page has no screenshot yet.
+  'bookmarkPreviewNone',
+  // The bookmark column's folder editing (PR2): the header button, the name field, the toast.
+  'bookmarksNewFolder', 'bookmarksNewFolderIn', 'bookmarksFolderDefaultName',
+  'bookmarksRename', 'bookmarksRenameField', 'bookmarksStale',
+  // The row menu and the keys that move a row (PR2): Move up, Move down, Move to…, and the toast.
+  'bookmarksMoveUp', 'bookmarksMoveDown', 'bookmarksMoveTo', 'bookmarksMovedTo',
 ];
 
 // Strings the end-to-end specs assert verbatim.
@@ -62,6 +69,8 @@ const EXACT_EN = {
   bookmarksGrantTitle: 'Bookmarks need your permission first',
   bookmarksGrantButton: 'Allow bookmarks',
   bookmarksMore: '$COUNT$ more',
+  // 39-bookmark-preview asserts this one verbatim as well.
+  bookmarkPreviewNone: 'No saved preview for this page.',
 };
 const EXACT_JA = {
   extName: '縦型タブ',
@@ -185,26 +194,27 @@ test('every i18n key referenced from extension/** is defined', () => {
   assert.deepEqual(undefinedKeys, [], 'i18n keys referenced by the extension but missing from _locales/en');
 });
 
-// settings-view.js does not spell three of its i18n keys out. It derives them from data:
+// settings-view.js does not spell two of its i18n keys out. It derives them from data:
 //
 //   options: COLUMN_CHOICES.map((n) => [String(n), `columns${n}`])
 //   px === CARD_WIDTH_FILL ? 'cardWidthFill' : `cardWidth${px}`
-//   labelKey: `widget${id.charAt(0).toUpperCase()}${id.slice(1)}`
 //
 // A template literal is invisible to the reference scan above and to MSG_RE in
 // tools/check_integration.py, so adding a choice can ship a row labelled with its own key.
-// widgetStaleTabs shipped exactly that way: the staleTabs widget is titled widgetStale, so
-// the key the drawer derived was defined nowhere and the checkbox read "widgetStaleTabs".
-// t() does console.warn on a miss (common/i18n.js), but no test asserts on the console and
-// the __MSG_ guards in 01-load, 09-i18n and 14-coverage cannot fire — t() returns the bare
-// key, not __MSG_key__ — so nothing failed. These three tests are the check the derivations
-// do not otherwise get.
+// There was a third, `widget${id.charAt(0).toUpperCase()}${id.slice(1)}`, and widgetStaleTabs
+// shipped exactly that way: the staleTabs widget is titled widgetStale, so the key the drawer
+// derived was defined nowhere and the checkbox read "widgetStaleTabs". t() does console.warn
+// on a miss (common/i18n.js), but no test asserts on the console and the __MSG_ guards in
+// 01-load, 09-i18n and 14-coverage cannot fire — t() returns the bare key, not __MSG_key__ —
+// so nothing failed. That third derivation is gone: the drawer reads each tool's own
+// titleKey, so the tick and the heading are one string rather than two kept in step. The
+// tests below check the two that remain, pin the shape of both, and hold the widget rows to
+// the stricter thing that replaced the derivation.
 test('every option the settings drawer derives has a message in both locales', async () => {
-  const { WIDGET_IDS, COLUMN_CHOICES, CARD_WIDTH_CHOICES, CARD_WIDTH_FILL } =
+  const { COLUMN_CHOICES, CARD_WIDTH_CHOICES, CARD_WIDTH_FILL } =
     await loadCommon('settings-schema.js');
 
   const derived = [
-    ...WIDGET_IDS.map((id) => [`widget${id.charAt(0).toUpperCase()}${id.slice(1)}`, `widget id "${id}"`]),
     ...COLUMN_CHOICES.map((n) => [`columns${n}`, `column choice ${n}`]),
     ...CARD_WIDTH_CHOICES.map((px) => [
       px === CARD_WIDTH_FILL ? 'cardWidthFill' : `cardWidth${px}`,
@@ -220,7 +230,7 @@ test('every option the settings drawer derives has a message in both locales', a
   assert.deepEqual(missing, [], 'settings-view.js derives these keys but _locales does not define them');
 });
 
-// The test above re-types the three expressions rather than calling them, so it cannot see a
+// The test above re-types the two expressions rather than calling them, so it cannot see a
 // change to the derivation itself. This pins them: change one and this fails, naming the file
 // to edit. Delete an entry here when its key stops being derived.
 test('the settings drawer still builds its keys the way the test above assumes', () => {
@@ -228,14 +238,79 @@ test('the settings drawer still builds its keys the way the test above assumes',
   const expressions = [
     '`columns${n}`',
     "px === CARD_WIDTH_FILL ? 'cardWidthFill' : `cardWidth${px}`",
-    '`widget${id.charAt(0).toUpperCase()}${id.slice(1)}`',
   ];
   const gone = expressions.filter((expr) => !src.includes(expr));
   assert.deepEqual(gone, [],
     'settings-view.js changed how it builds a label key — the test above copies these expressions verbatim and has to change with it');
 });
 
-test('every widget declares a heading both locales define, and its drawer row agrees', async () => {
+// The widget ticks are not derived any more, so the entry for them was removed above rather
+// than relaxed: what used to be "the derived key exists and reads the same as the heading" is
+// now true by construction, because the row and the heading are the same key. That holds only
+// while the drawer keeps asking the registry, so both halves are pinned here — it reads
+// titleKey, and it never spells a widget key out from an id again.
+test('the settings drawer names each tool row from the tool itself, not from its id', () => {
+  const src = fs.readFileSync(path.join(EXT, 'sidepanel', 'settings-view.js'), 'utf8');
+  assert.ok(src.includes('labelKey: getWidget(id)?.titleKey'),
+    'the widget rows must take their label from getWidget(id).titleKey (extension/sidepanel/settings-view.js)');
+  // Both spellings of the old bug: the template literal it actually shipped as, and the
+  // string concatenation someone reaches for when a linter dislikes the template. The
+  // template arm deliberately does not require `}` to close the string, so
+  // `widget${id}Tabs` — the historical shape — is caught too.
+  const derived = [
+    ...(src.match(/`widget\$\{[^`]*/g) || []),
+    ...(src.match(/['"]widget['"]\s*\+/g) || []),
+  ];
+  assert.deepEqual(derived, [],
+    'settings-view.js is building a widget i18n key out of the id again — that is how widgetStaleTabs shipped');
+});
+
+// The drawer walks WIDGET_IDS -> REGISTRY -> titleKey, but the test above only walks
+// WIDGET_IDS -> the widget modules. widgets.js, which holds REGISTRY, was read by no test at
+// all, and a tool listed in WIDGET_IDS but left out of the registry now renders a tick
+// labelled with its bare id instead of its name. widgets.js even concedes the two can
+// disagree — AVAILABLE filters WIDGET_IDS by REGISTRY — while the drawer iterates WIDGET_IDS
+// raw, so nothing but this keeps the registry honest.
+test('every tool the settings drawer offers is one the rail can actually build', async () => {
+  const { WIDGET_IDS } = await loadCommon('settings-schema.js');
+  const src = fs.readFileSync(path.join(EXT, 'sidepanel', 'widgets.js'), 'utf8');
+
+  const registry = src.match(/const REGISTRY = new Map\(\s*\[([\s\S]*?)\]/);
+  assert.ok(registry, 'could not find the REGISTRY array in extension/sidepanel/widgets.js');
+  const registered = new Set(
+    registry[1].split(',').map((name) => name.trim()).filter(Boolean),
+  );
+
+  // Pair each exported widget object with the id it declares, so an id can be traced back
+  // to the binding name REGISTRY has to list.
+  const nameOf = new Map();
+  for (const file of walk(path.join(EXT, 'sidepanel', 'widgets'), (f) => f.endsWith('.js'))) {
+    const text = fs.readFileSync(file, 'utf8');
+    const exports = [...text.matchAll(/export const (\w+)\s*=\s*\{/g)];
+    exports.forEach((match, i) => {
+      const end = i + 1 < exports.length ? exports[i + 1].index : text.length;
+      const body = text.slice(match.index, end);
+      const id = body.match(/\bid:\s*['"]([A-Za-z][A-Za-z0-9]*)['"]/);
+      if (id) nameOf.set(id[1], { binding: match[1], file: path.relative(EXT, file) });
+    });
+  }
+
+  const missing = [];
+  for (const id of WIDGET_IDS) {
+    const found = nameOf.get(id);
+    if (!found) {
+      missing.push(`${id} is in WIDGET_IDS but no widget module exports an object declaring it`);
+    } else if (!registered.has(found.binding)) {
+      missing.push(
+        `${id} (${found.file}, exported as ${found.binding}) is offered in the settings drawer `
+        + 'but is not in the REGISTRY array in extension/sidepanel/widgets.js, so getWidget() '
+        + 'returns null and its tick would be labelled with the bare id');
+    }
+  }
+  assert.deepEqual(missing, [], missing.join('\n'));
+});
+
+test('every widget declares a heading both locales define, and the drawer row wears it', async () => {
   const { WIDGET_IDS } = await loadCommon('settings-schema.js');
 
   // Pair `id` with `titleKey` inside each widget module. Scanning for the two tokens and
@@ -269,22 +344,22 @@ test('every widget declares a heading both locales define, and its drawer row ag
   assert.deepEqual([...declared.keys()].sort(), [...WIDGET_IDS].sort(),
     'every id in WIDGET_IDS must come from a widget module declaring `id` and `titleKey` within six lines of each other');
 
+  // widgets.js lets `titleKey` be '' to mean "render no heading in the rail". The settings
+  // drawer has no such option: that key is also the name on the tick, and t('') is '', so a
+  // headless widget would ship a checkbox with nothing beside it. Naming a tool is therefore
+  // required here even though the rail would tolerate silence.
   const problems = [];
   for (const [id, { titleKey, file, line }] of declared) {
-    if (!titleKey) continue; // a widget may render no heading at all
-    const derived = `widget${id.charAt(0).toUpperCase()}${id.slice(1)}`;
+    if (!titleKey) {
+      problems.push(`${file}:${line} (${id}) declares no titleKey, so its settings tick would have no label`);
+      continue;
+    }
     for (const [name, table] of [['en', en], ['ja', ja]]) {
-      const heading = table[titleKey]?.message;
-      if (heading === undefined) {
-        problems.push(`${name}: ${file}:${line} is titled ${titleKey}, which no locale defines`);
-        continue;
-      }
-      const label = table[derived]?.message;
-      if (label !== heading) {
-        problems.push(`${name}: the drawer row says "${label}" (${derived}) but ${file}:${line} says "${heading}" (${titleKey})`);
+      if (!table[titleKey]?.message) {
+        problems.push(`${name}: ${file}:${line} is titled ${titleKey}, which ${name} does not define`);
       }
     }
   }
   assert.deepEqual(problems, [],
-    'the drawer checkbox and the widget heading name the same tool and must read identically');
+    'the drawer checkbox and the widget heading are the same i18n key, so every widget needs one both locales define');
 });

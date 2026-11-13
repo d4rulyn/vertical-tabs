@@ -108,7 +108,18 @@ test('dragging a card past another reorders the tab strip', async ({ harness, se
   await expect.poll(() => indexOfTab(serviceWorker, w2, tabIds.alpha), { timeout: 15_000 }).toBe(2);
   const tabs = await queryTabs(serviceWorker, w2);
   expect(tabs.map((t) => t.id)).toEqual([tabIds.beta, tabIds.gamma, tabIds.alpha]);
-  expect(await cardOrder(panel)).toEqual(tabs.map((t) => t.id));
+  // The panel does not move a card optimistically. `tabs.onMoved` reaches the service
+  // worker, the panel hears it and calls `resync()`, and the re-query plus repaint land
+  // a turn or two later (state.js, the onMoved listener). Reading the DOM once, in the
+  // moment the service worker reports the move, asserts a synchrony the design never
+  // promised — which is why this one line flaked in whole-suite runs while the line
+  // above it, the browser's own order, passed.
+  //
+  // Polling is not a relaxation: the order is still pinned exactly, the ceiling is the
+  // suite's standard 15 s rather than a longer one, and a panel that never converges
+  // still fails. The only thing loosened is WHEN the DOM is allowed to be right.
+  await expect.poll(() => cardOrder(panel), { timeout: 15_000 })
+    .toEqual(tabs.map((t) => t.id));
 });
 
 test('a multi-column list drops on the horizontal split, not the vertical one', async ({

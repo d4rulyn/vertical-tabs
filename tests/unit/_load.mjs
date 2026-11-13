@@ -56,6 +56,41 @@ export async function loadCommon(name) {
   }
 }
 
+/**
+ * Imports extension/sidepanel/<name>.js, for the few panel modules that have no DOM at import
+ * time (thumbs.js). Unlike `loadCommon`, the module has siblings under `../common/`, so the
+ * fallback mirror keeps the two directories side by side:
+ * `<out>/esm-sidepanel/{common,sidepanel}/*.mjs`, every relative `.js` specifier rewritten.
+ * @param {string} name file name including the .js extension
+ */
+export async function loadSidepanel(name) {
+  const direct = path.join(EXT, 'sidepanel', name);
+  if (!fs.existsSync(direct)) {
+    throw new Error(`extension/sidepanel/${name} does not exist — the module contract is not met`);
+  }
+  try {
+    return await import(pathToFileURL(direct).href);
+  } catch (err) {
+    if (!ESM_SYNTAX_ERROR.test(String((err && err.message) || err))) throw err;
+  }
+  const root = path.join(path.dirname(MIRROR), 'esm-sidepanel');
+  for (const dir of ['common', 'sidepanel']) {
+    const from = path.join(EXT, dir);
+    const to = path.join(root, dir);
+    fs.mkdirSync(to, { recursive: true });
+    for (const file of fs.readdirSync(from)) {
+      if (!file.endsWith('.js')) continue;
+      // `thumbs.js` only needs `../common/*` and itself; the other panel modules are not mirrored.
+      if (dir === 'sidepanel' && file !== name) continue;
+      fs.writeFileSync(
+        path.join(to, file.replace(/\.js$/, '.mjs')),
+        rewriteSpecifiers(fs.readFileSync(path.join(from, file), 'utf8')),
+      );
+    }
+  }
+  return import(pathToFileURL(path.join(root, 'sidepanel', name.replace(/\.js$/, '.mjs'))).href);
+}
+
 /** Recursively lists files under `dir` matching `filter`. */
 export function walk(dir, filter = () => true, out = []) {
   if (!fs.existsSync(dir)) return out;

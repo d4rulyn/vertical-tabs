@@ -44,10 +44,16 @@ export const sessions = {
     body.append(save, empty, list);
 
     let alive = true;
+    // See recent.js: `paint` is async and every row can call it back, so a save racing
+    // a row's delete — or two deletes — would otherwise let the older read write last.
+    // Only the DOM is guarded. The delete at the bottom of this file is a read-modify-
+    // write on storage, so two of them still lose an update; a token cannot fix that.
+    let paintToken = 0;
 
     const paint = async () => {
+      const token = (paintToken += 1);
       const saved = await read();
-      if (!alive) return;
+      if (!alive || token !== paintToken) return;
       empty.hidden = saved.length > 0;
       list.textContent = '';
       for (const session of saved) list.append(row(session, paint, ctx));

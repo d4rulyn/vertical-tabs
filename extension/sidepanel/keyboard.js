@@ -7,7 +7,7 @@
  * handled by the service worker — they never reach this document.
  *
  * DOM touched: `#tablist`, `#pinned`, `.tab-card`, `.pinned-tile`,
- * `.group-header`, `.close`, `#btn-new-tab`.
+ * `.group-header`, `.group-close`, `.close`, `#btn-new-tab`.
  */
 
 import * as log from '../common/log.js';
@@ -34,13 +34,32 @@ let pinnedEl = null;
 let focusedTabId = null;
 /** @type {number|null} */
 let lastTileTabId = null;
-/** @type {{ successorTabId: number|null, mode: 'close'|'card', at: number }|null} */
+/**
+ * `awaitRemoval`: a group's `.group` element, recorded by the click on its x (group-close.js). That
+ * click cannot say when the group will go: the confirm bar waits for a person and `chrome.tabs.remove`
+ * for Chrome, and neither has a deadline. So such an entry has none while the group is drawn (see
+ * `applyPendingFocus`); the click may also close nothing at all (the bar answered No, every member
+ * locked), and then focus must simply stay where it is.
+ * `closing`: the tab ids that click asked to close; `goneAt`: when the panel first saw the group's element
+ * leave the DOM. `viaGroup`: the entry a group's hand-off turns into once the group is gone (an ordinary card
+ * hand-off from then on, except that it re-checks itself at its deadline, see `armRecheck`). `moves`: how many
+ * times a render re-inserted the group's element while it was drawn (`noteGroupMoved`, read by `onFocusOut`).
+ * @type {{ successorTabId: number|null, mode: 'close'|'card', at: number, awaitRemoval?: Element,
+ *          closing?: number[], goneAt?: number, viaGroup?: true, moves?: number }|null}
+ */
 let pendingFocus = null;
 /** A pending focus hand-off is abandoned when its card never shows up. */
 const PENDING_FOCUS_TTL_MS = 2000;
+/**
+ * The one timer of `armRecheck`: it runs `sync()` again when a group's hand-off is waiting on a clock.
+ * @type {ReturnType<typeof setTimeout>|null}
+ */
+let recheckTimer = null;
 /** @type {MutationObserver|null} */
 let observer = null;
 let syncQueued = false;
+/** The entry whose focus-loss check (`onFocusOut`) is waiting for its frame. */
+let lossCheckFor = null;
 let bound = false;
 
 /* ── init ─────────────────────────────────────────────────────────────────── */
@@ -54,6 +73,7 @@ export function init(context) {
   if (!bound) {
     bound = true;
     document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('focusout', onFocusOut, true);
     for (const root of [tablist, pinnedEl]) {
       if (!root) continue;
       root.addEventListener('focusin', onFocusIn);
@@ -155,6 +175,29 @@ function onFocusIn(event) {
 function onClickCapture(event) {
   const el = event.target instanceof Element ? event.target : null;
   if (!el) return;
+  const groupClose = el.closest('.group-close');
+  if (groupClose) {
+    // group-close.js refuses the later click of a multi-click (`event.detail > 1`, its `onClick`). That click
+    // closes nothing, so it must not record a hand-off either: it would replace the entry of the close that is
+    // in progress. A click made from the keyboard has `detail === 0`.
+    if (event.detail > 1) return;
+    // The button is about to be removed with its group, taking focus with it. Hand the
+    // focus to the card that takes its place (A15.4, which says it must never land on <body>)
+    // once the group is gone. If it never goes (confirm bar answered No, every member
+    // locked) the entry stays where it is and does nothing: `applyPendingFocus` acts on it
+    // only when the group leaves while focus is lost, and `onFocusOut` drops it when focus
+    // is parked on <body> while the group is still drawn and no confirm bar is open.
+    const section = groupClose.closest('.group');
+    if (section) {
+      const groupId = Number(section.getAttribute('data-group-id'));
+      clearRecheck();
+      pendingFocus = {
+        successorTabId: successorOfGroup(section), mode: 'card', at: Date.now(), awaitRemoval: section,
+        closing: Number.isInteger(groupId) ? contextMenu.tabIdsOfGroup(groupId) : [],
+      };
+    }
+    return;
+  }
   const closeBtn = el.closest('.close');
   if (!closeBtn) return;
   const card = closeBtn.closest('.tab-card') || closeBtn.closest('.pinned-tile');
@@ -164,9 +207,60 @@ function onClickCapture(event) {
   pendingFocus = { successorTabId: successorOf(tabId), mode: 'close', at: Date.now() };
 }
 
+/**
+ * A group's hand-off is recorded by the click on its x before anyone knows whether the group will go (the bar may be
+ * answered No, every member may be locked), and while the group is drawn it has no deadline. It must not outlive the
+ * focus that justified it: if focus is lost to <body> while the group is still drawn, the user put it there (Escape on the
+ * focused x blurs it), and a group that goes later by another route must not pull focus back to a card. So the entry is
+ * dropped. Three things that also take focus off the x are NOT the user walking away from the close:
+ *  - the confirm bar takes it to its OK button and gives it back (`document.activeElement` is the button, then the x,
+ *    when the frame comes),
+ *  - a render that re-inserts the group's own element (`reconcile()` moves a kept element that stands behind a stale one,
+ *    and a node that is moved loses focus): `noteGroupMoved` counts those, and a count that changed between the
+ *    `focusout` and the frame means the loss was the render's, and
+ *  - the confirm bar being open at all: its text and its padding cannot take focus, so a click on them blurs the OK
+ *    button and leaves focus on <body> while the question is still on screen. Answering Yes then closes the group and
+ *    still needs this entry; answering No gives focus back to the x.
+ * Read after a frame, not in the handler: when the group itself goes, its x is blurred while the element is still
+ * connected, and only a frame later is it plain that the group is gone (then `applyPendingFocus` has the entry).
+ */
+function onFocusOut() {
+  const entry = pendingFocus;
+  if (!entry || !entry.awaitRemoval || lossCheckFor === entry) return;
+  lossCheckFor = entry;
+  const movesBefore = entry.moves || 0;
+  const run = () => {
+    if (lossCheckFor === entry) lossCheckFor = null;
+    if (pendingFocus !== entry || !entry.awaitRemoval.isConnected) return;
+    if ((entry.moves || 0) !== movesBefore) return;
+    if (toastMod.isConfirmOpen()) return;
+    const active = document.activeElement;
+    if (!active || active === document.body) pendingFocus = null;
+  };
+  if (document.hidden) setTimeout(run, 0);
+  else requestAnimationFrame(run);
+}
+
+/** @param {MutationRecord[]} records */
+function noteGroupMoved(records) {
+  const entry = pendingFocus;
+  if (!entry || !entry.awaitRemoval) return;
+  for (const record of records) {
+    for (const nodes of [record.addedNodes, record.removedNodes]) {
+      for (const node of nodes) {
+        if (node === entry.awaitRemoval) {
+          entry.moves = (entry.moves || 0) + 1;
+          return;
+        }
+      }
+    }
+  }
+}
+
 function observeRenders() {
   if (observer || typeof MutationObserver !== 'function') return;
-  observer = new MutationObserver(() => {
+  observer = new MutationObserver((records) => {
+    noteGroupMoved(records);
     if (syncQueued) return;
     syncQueued = true;
     const run = () => {
@@ -181,9 +275,69 @@ function observeRenders() {
   if (pinnedEl) observer.observe(pinnedEl, options);
 }
 
+/**
+ * `applyPendingFocus` only runs from `sync()`, and `sync()` runs when the list renders or takes focus. A group's
+ * hand-off waits on a clock in two places (the closing wait and the successor wait below, each bounded by
+ * `PENDING_FOCUS_TTL_MS`), and a wait that ends in a bare `return` would have its deadline pass unseen once the
+ * list stops rendering, with focus left on <body>. So each of them asks to be run again when its deadline is over.
+ * One slot: arming replaces the timer, and `applyPendingFocus` clears it on every run, so it never outlives the
+ * entry it was armed for by more than the timer's own delay; a timer that fires after its entry is gone is a no-op.
+ * @param {object} entry the entry waiting
+ * @param {number} msLeft how long until its deadline
+ */
+function armRecheck(entry, msLeft) {
+  clearRecheck();
+  // +1: the deadline is `elapsed > TTL`, so the run has to come after the TTL is over, not at it.
+  recheckTimer = setTimeout(() => {
+    recheckTimer = null;
+    if (pendingFocus === entry) sync();
+  }, Math.max(0, msLeft) + 1);
+}
+
+function clearRecheck() {
+  if (recheckTimer === null) return;
+  clearTimeout(recheckTimer);
+  recheckTimer = null;
+}
+
 /** A15.4: focus the successor once the removed card is actually gone. */
 function applyPendingFocus() {
+  clearRecheck(); // whatever is still waiting on a clock below asks for it again
   if (!pendingFocus) return;
+  if (pendingFocus.awaitRemoval) {
+    // The x on a group header. Its click and the group's removal can be any time apart (a person
+    // answering the confirm bar, Chrome busy closing), so the 2 s deadline below must not run from the
+    // click. While the group is drawn there is nothing to hand off yet, and no deadline either: one that
+    // ran out first left focus on <body> (the entry lapsed in a render that did not remove the group, then
+    // the group went with nothing pending; the render that does remove it can also be the first one after
+    // the deadline, and then `rescueFocus` picks the list's first card instead of the neighbour).
+    const entry = pendingFocus;
+    if (entry.awaitRemoval.isConnected) return;
+    // The group's element is gone; its tabs may not be. Chrome closes a group's tabs one event at a time
+    // and the group goes before the last of them, so for a moment that tab is drawn loose, in front of the
+    // next group; when it goes the list is laid out once more and `reconcile()` (render.js) MOVES the next
+    // group's element out of the way, which takes focus off a card inside it. So the hand-off waits for the
+    // tabs as well as the element, for 2 s counted from the moment the element was seen gone. The wait is
+    // not left to the next render: at its deadline `armRecheck` runs this again by itself, so a tab that
+    // never goes does not keep focus on <body> (the hand-off then goes ahead with that tab still drawn).
+    if (entry.goneAt === undefined) entry.goneAt = Date.now();
+    const closingLeft = PENDING_FOCUS_TTL_MS - (Date.now() - entry.goneAt);
+    if (closingLeft >= 0 && (entry.closing || []).some((id) => cardFor(id))) {
+      armRecheck(entry, closingLeft);
+      return;
+    }
+    // The x took focus down with its group: focus is on <body> (or on something that is gone) and the hand-off
+    // goes ahead. If focus is on anything else, it was put there since (a Cancelled close can leave its entry
+    // behind for a long time): the entry is dropped and focus stays where it is. An entry whose focus was
+    // parked on <body> while the group was still drawn was dropped by `onFocusOut` and never gets here.
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) {
+      pendingFocus = null;
+      return;
+    }
+    // From here it is a card's hand-off, whose 2 s are for the successor to be drawn: they start now.
+    pendingFocus = { successorTabId: pendingFocus.successorTabId, mode: pendingFocus.mode, at: Date.now(), viaGroup: true };
+  }
   const { successorTabId, mode, at } = pendingFocus;
   if (Date.now() - at > PENDING_FOCUS_TTL_MS) {
     // Giving up on the successor must not mean giving up on focus. The deadline is a
@@ -197,7 +351,12 @@ function applyPendingFocus() {
   }
   if (successorTabId != null) {
     const card = cardFor(successorTabId);
-    if (!card) return; // the render has not caught up yet
+    if (!card) {
+      // The render has not caught up yet. A group's hand-off also has to come back by itself (see `armRecheck`);
+      // a card's own hand-off is left exactly as it was.
+      if (pendingFocus.viaGroup) armRecheck(pendingFocus, PENDING_FOCUS_TTL_MS - (Date.now() - at));
+      return;
+    }
     pendingFocus = null;
     focusedTabId = successorTabId;
     const target = mode === 'close' ? card.querySelector('.close') : card;
@@ -252,6 +411,16 @@ function onKeyDown(event) {
 
   if (event.key === 'Escape') {
     onEscape(event);
+    return;
+  }
+
+  // The confirm bar must not be answered by the key that opened it. Enter on the x clicks it, the bar opens and takes
+  // focus to its OK button, and the repeats of the Enter that is still held then land THERE. Measured only with
+  // Playwright's synthetic autoRepeat (Probe 16, Result 10): Chromium 151 then clicked the focused OK button on the
+  // first repeat, so the question was answered before anyone could read it. A repeat from a real keyboard or the OS
+  // was not measured. The rule is keyed on #confirm-bar, so it covers every confirm bar, whoever opened it.
+  if (event.repeat && event.key === 'Enter' && event.target instanceof Element && event.target.closest('#confirm-bar')) {
+    event.preventDefault();
     return;
   }
 
@@ -548,6 +717,18 @@ function onGroupHeaderKey(event, header) {
     return;
   }
 
+  // The close button is a real <button> (group-close.js): Enter and Space must reach the
+  // browser, which turns them into the click it listens for. Below, they toggle the group.
+  // Only the first press counts on the x: a repeat (`event.repeat`) of Enter or of Space is cancelled here. Measured
+  // only with Playwright's synthetic autoRepeat and without this rule (Probe 16, Result 10): Chromium 151 clicked the
+  // focused button once per repeat of Enter, which would close, or ask, again and again, and once, on keyup, for
+  // Space. A held Space WITH this rule, and a repeat from a real keyboard or the OS, were not measured.
+  const onClose = event.target instanceof Element && event.target.closest('.group-close') !== null;
+  if (onClose && (event.key === 'Enter' || event.key === ' ')) {
+    if (event.repeat) event.preventDefault();
+    return;
+  }
+
   switch (event.key) {
     case 'ArrowRight': {
       event.preventDefault();
@@ -677,6 +858,20 @@ function successorOf(tabId) {
   if (index + 1 < cards.length) return tabIdOf(cards[index + 1]);
   if (index - 1 >= 0) return tabIdOf(cards[index - 1]);
   return null;
+}
+
+/**
+ * The visible card nearest to a group, outside it: the first one after it, else the last
+ * one before it.
+ * @param {Element} section a `.group`
+ * @returns {number|null}
+ */
+function successorOfGroup(section) {
+  const outside = visibleCards().filter((card) => card.closest('.group') !== section);
+  const after = outside.find((card) => section.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING);
+  if (after) return tabIdOf(after);
+  const before = outside.filter((card) => section.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_PRECEDING);
+  return before.length > 0 ? tabIdOf(before[before.length - 1]) : null;
 }
 
 /**

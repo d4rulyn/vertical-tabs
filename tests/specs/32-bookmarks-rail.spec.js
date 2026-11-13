@@ -13,13 +13,17 @@
 // for `bookmarks` in the required `permissions` array, because Playwright cannot answer
 // Chrome's own permission bubble. The act of granting is therefore NOT tested here and
 // cannot be; the full reasoning, and the manual release gate that covers it, are in the
-// banner above `buildGrantedExtension()`.
+// banner above the ungranted test below. `buildGrantedExtension()` itself now lives in
+// helpers/bookmarks.js, shared with the hover-preview specs.
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
-const { test, expect, launchExtensionContext } = require('../fixtures');
+const { test, expect } = require('../fixtures');
 const { setSettings, sleep, swEval } = require('../helpers/chrome');
+// The synthesised-grant copy of the extension and the bookmark seeding / reading helpers
+// live in a helper so the hover-preview specs load the very same fixture.
+const {
+  granted, seedBookmarks, rows, clickRow, showBookmarks,
+} = require('../helpers/bookmarks');
 
 // `DEFAULTS.widgets` from extension/common/settings-schema.js, in order. Written out
 // rather than imported because the specs are CommonJS and the schema is an ES module
@@ -114,9 +118,38 @@ function columnState(panel) {
       bookmarkRailChildren: bookmarkRail.childElementCount,
       stripHidden: strip.hidden,
       tools: [...strip.querySelectorAll('[data-tool]')].map((b) => b.dataset.tool),
+      // Everything in the strip, not just what carries `data-tool`. A second switch put
+      // back under any name — or none — shows up as a child the tools cannot account for.
+      stripChildren: strip.childElementCount,
       settingsWidgets: [...window.__vt.settings.widgets],
       railMode: window.__vt.settings.railMode,
       overflows: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    };
+  });
+}
+
+/**
+ * Where the topbar button sits, and how many rail-mode BUTTONS are on screen. Both
+ * testids are counted, so putting the old strip switch back makes `count` 2 — but a
+ * switch under a different name would not, which is why the real guard is
+ * `stripChildren` in `columnState()` and not this count. The settings drawer's
+ * `railMode` select is deliberately not counted: that is the way in, not something the
+ * user has to find their way back out with.
+ */
+function modeControls(panel) {
+  return panel.evaluate(() => {
+    const strip = document.getElementById('tool-strip');
+    const shown = [...document.querySelectorAll(
+      '[data-testid="rail-mode-button"], [data-testid="rail-mode-toggle"]',
+    )].filter((el) => el.getClientRects().length > 0);
+    const top = document.querySelector('[data-testid="rail-mode-button"]');
+    const r = top && top.getClientRects().length > 0 ? top.getBoundingClientRect() : null;
+    return {
+      count: shown.length,
+      inStrip: shown.filter((el) => strip && strip.contains(el)).length,
+      box: r
+        ? { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }
+        : null,
     };
   });
 }
@@ -128,6 +161,12 @@ test('bookmarks mode gives the column to the bookmarks and the tools to the stri
   const { panel } = harness;
   await panel.setViewportSize({ width: 360, height: 720 });
   await setSettings(serviceWorker, { refreshInterval: 'off', railMode: 'bookmarks' });
+
+  // 360 px is Chrome's minimum panel width and the only width where the topbar is tight.
+  // `trial` runs actionability — visible, stable, and HIT-TESTED — without clicking, so
+  // this catches the exit being covered or squeezed out, which `toBeVisible` cannot.
+  await panel.locator('[data-testid="rail-mode-button"]')
+    .click({ trial: true, timeout: 15_000 });
 
   await expect.poll(async () => (await columnState(panel)).railMode, { timeout: 10_000 })
     .toBe('bookmarks');
@@ -252,8 +291,8 @@ test('the mode switch flips the column both ways and the tools come back', async
   await expect.poll(async () => (await columnState(panel)).tools, { timeout: 15_000 })
     .toEqual(mine);
 
-  // Back to the tools, from the strip rather than from four clicks into the drawer.
-  await panel.locator('[data-testid="rail-mode-toggle"]').click();
+  // Back to the tools, from the topbar rather than from four clicks into the drawer.
+  await panel.locator('[data-testid="rail-mode-button"]').click();
   await expect.poll(async () => (await columnState(panel)).railMode, { timeout: 10_000 })
     .toBe('tools');
   const back = await columnState(panel);
@@ -286,9 +325,9 @@ test('the topbar button switches the column both ways, from either side', async 
   await panel.setViewportSize({ width: 460, height: 900 });
   /* The drawer's select is the complete way to set this, and it is two levels down a
    * panel of settings. The first person to use the feature could not find it, so the
-   * switch also lives in the topbar where it is always one press — and, unlike the
-   * strip's own toggle, it is there in TOOLS mode too, which is the direction that had
-   * no in-panel way in at all. */
+   * switch also lives in the topbar where it is always one press. It is the ONLY
+   * in-panel switch: the tool strip used to carry a second one, which was absent in
+   * tools mode and so disappeared the moment it was used. */
   await setSettings(serviceWorker, { refreshInterval: 'off' });
 
   const button = panel.locator('[data-testid="rail-mode-button"]');
@@ -331,27 +370,34 @@ test('the topbar button switches the column both ways, from either side', async 
   await expect(panel.locator('[data-testid="settings-railMode"]')).toHaveValue('bookmarks');
 });
 
-test('with every tool unticked the strip is still the way back out of bookmarks', async ({
+test('with every tool unticked the strip goes too, and the topbar is the way out', async ({
   harness, serviceWorker,
 }) => {
   test.setTimeout(180_000);
   const { panel } = harness;
   await panel.setViewportSize({ width: 460, height: 900 });
   // The README advertises unticking them all as the way to hide the column, and the
-  // settings help text says so too. Doing that and then choosing bookmarks must not also
-  // remove the only in-panel way back: the strip carries no tools here, but it still has
-  // to carry the switch.
+  // settings help text says so too. Doing that and then choosing bookmarks leaves the
+  // strip with nothing to carry, now that the switch lives in the topbar — so the strip
+  // must go rather than stand there as an empty bar, and the way out must still exist.
   await setSettings(serviceWorker, {
     refreshInterval: 'off', railMode: 'bookmarks', widgets: [],
   });
 
-  const toggle = panel.locator('[data-testid="rail-mode-toggle"]');
-  await expect(toggle).toBeVisible({ timeout: 15_000 });
+  // Waited on the RAIL, not on `railMode`: `__vt.settings` is updated by `state.js` as
+  // soon as storage changes, which is before `tool-strip.apply()` has run, so a snapshot
+  // taken on that signal can still be reading the markup's own defaults. `apply()` writes
+  // `bookmarkRail.hidden` and `strip.hidden` in one synchronous pass.
+  await expect.poll(async () => (await columnState(panel)).bookmarkRailHidden, { timeout: 15_000 })
+    .toBe(false);
   const shown = await columnState(panel);
-  expect(shown.stripHidden, 'the strip is on screen for the switch alone').toBe(false);
+  expect(shown.railMode).toBe('bookmarks');
+  expect(shown.stripHidden, 'nothing to put in the strip, so it costs no height').toBe(true);
   expect(shown.tools, 'and it carries no tools, because none are ticked').toEqual([]);
   expect(shown.bookmarkRailHidden).toBe(false);
 
+  const toggle = panel.locator('[data-testid="rail-mode-button"]');
+  await expect(toggle, 'the only way out is the topbar one, and it is on screen').toBeVisible();
   await toggle.click();
   await expect.poll(async () => (await columnState(panel)).railMode, { timeout: 10_000 })
     .toBe('tools');
@@ -360,6 +406,101 @@ test('with every tool unticked the strip is still the way back out of bookmarks'
   expect(back.widgetRailHidden, 'no tool is ticked, so the column goes entirely').toBe(true);
   expect(back.bookmarkRailHidden).toBe(true);
   expect(back.overflows, 'the panel never scrolls sideways').toBe(false);
+});
+
+test('a press on the topbar closes the sheet before the mode even changes', async ({
+  harness, serviceWorker,
+}) => {
+  test.setTimeout(180_000);
+  const { panel } = harness;
+  await panel.setViewportSize({ width: 460, height: 900 });
+  // TWO things close the sheet when the topbar button is pressed: `onDocumentPointerDown`
+  // on the way DOWN, and `widgets.apply()` tearing the sheet's copy down once the setting
+  // lands. The test below this file's `flipping back to tools` one covers the second — it
+  // writes the setting directly and never touches a pointer. This covers the FIRST, which
+  // is the half of "the explicit `closeSheet()` is not lost" that had no test: it asserts
+  // the sheet is gone while the button is STILL HELD DOWN, before any click was dispatched.
+  await setSettings(serviceWorker, {
+    refreshInterval: 'off', railMode: 'bookmarks', widgets: ['scratchpad'],
+  });
+
+  const tool = panel.locator('[data-testid="tool-scratchpad"]');
+  await expect(tool).toBeVisible({ timeout: 15_000 });
+  await tool.click();
+  const sheet = panel.locator('[data-testid="tool-sheet"]');
+  await expect(sheet).toBeVisible();
+  const note = 'held down mid-edit';
+  await panel.locator('#tool-sheet [data-testid="widget-scratchpad-text"]').fill(note);
+
+  const box = await panel.locator('[data-testid="rail-mode-button"]').boundingBox();
+  expect(box, 'the topbar button is on screen to press').not.toBeNull();
+  await panel.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await panel.mouse.down();
+  try {
+    await expect(sheet, 'pointerdown alone closed the sheet').toBeHidden({ timeout: 5_000 });
+    expect(
+      await panel.evaluate(() => window.__vt.settings.railMode),
+      'and it closed BEFORE the mode changed, so this was not `widgets.apply()`',
+    ).toBe('bookmarks');
+  } finally {
+    await panel.mouse.up();
+  }
+
+  await expect.poll(async () => (await columnState(panel)).widgetRailHidden, { timeout: 10_000 })
+    .toBe(false);
+  expect((await columnState(panel)).railMode).toBe('tools');
+  expect(
+    await panel.evaluate(() => ({
+      inRail: document.querySelectorAll('#widget-rail [data-widget="scratchpad"]').length,
+      inSheet: document.querySelectorAll('#tool-sheet [data-widget]').length,
+    })),
+    'one live copy, and it is the rail\'s',
+  ).toEqual({ inRail: 1, inSheet: 0 });
+  // The teardown that `pointerdown` triggered is what had to commit this.
+  await expect.poll(
+    () => panel.evaluate(() => chrome.storage.local.get('scratchpad').then((s) => s.scratchpad)),
+    { timeout: 10_000 },
+  ).toBe(note);
+});
+
+test('the mode switch is one control, in the same place in both modes', async ({
+  harness, serviceWorker,
+}) => {
+  test.setTimeout(180_000);
+  const { panel } = harness;
+  await panel.setViewportSize({ width: 460, height: 900 });
+  // What this encodes: a second switch used to sit at the end of the tool strip, so the
+  // control the user had just pressed vanished the moment the column changed. One
+  // control, one place, both modes.
+  await setSettings(serviceWorker, {
+    refreshInterval: 'off', railMode: 'tools', widgets: ['scratchpad', 'sessions'],
+  });
+  // `railMode: 'tools'` is the DEFAULT, so polling for it would pass before anything
+  // applied. The two ticked tools appearing in the column is the signal that did work.
+  await expect.poll(async () => (await columnState(panel)).widgets, { timeout: 15_000 })
+    .toEqual(['scratchpad', 'sessions']);
+
+  const inTools = await modeControls(panel);
+  expect(inTools.count, 'one rail-mode button is on screen in tools mode').toBe(1);
+  expect(inTools.box && inTools.box.w > 0 && inTools.box.h > 0, 'and it has a real size')
+    .toBe(true);
+
+  await panel.locator('[data-testid="rail-mode-button"]').click();
+  await expect.poll(async () => (await columnState(panel)).railMode, { timeout: 10_000 })
+    .toBe('bookmarks');
+  await expect.poll(async () => (await columnState(panel)).stripHidden, { timeout: 10_000 })
+    .toBe(false);
+
+  const inBookmarks = await modeControls(panel);
+  const cols = await columnState(panel);
+  expect(inBookmarks.count, 'still one — the strip must not add a second switch').toBe(1);
+  expect(inBookmarks.inStrip, 'and none of the rail-mode buttons is in the strip').toBe(0);
+  // The guard that does not depend on anyone naming the new button: every child of the
+  // strip is a tool. Fails for a second switch whatever its testid, or without one.
+  expect(cols.stripChildren, 'the strip holds the tools and nothing else')
+    .toBe(cols.tools.length);
+  expect(inBookmarks.box, 'the one control did not move when the mode changed')
+    .toEqual(inTools.box);
 });
 
 test('Escape closes the sheet even when the tool inside it has nothing to focus', async ({
@@ -530,111 +671,6 @@ test('ungranted, the column asks for the permission and reads nothing', async ({
   ).toBe(0);
 });
 
-/* ── The synthesised grant ─────────────────────────────────────────────────── */
-
-const OUT = process.env.OUT_DIR || path.resolve(__dirname, '../output');
-const SHIPPED_EXT = path.resolve(__dirname, '../../extension');
-
-/**
- * A byte-for-byte copy of extension/ with ONE edit: `bookmarks` moves out of
- * `optional_permissions` and into `permissions`. Nothing else is touched, so the code
- * under test is the code that ships; only the answer `permissions.contains()` gives is
- * different, which is precisely the state a real user reaches by pressing Allow.
- *
- * @param {string} dir
- * @returns {string} dir
- */
-function buildGrantedExtension(dir) {
-  fs.rmSync(dir, { recursive: true, force: true });
-  fs.cpSync(SHIPPED_EXT, dir, { recursive: true });
-  const file = path.join(dir, 'manifest.json');
-  const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (!(manifest.optional_permissions || []).includes('bookmarks')) {
-    throw new Error('extension/manifest.json no longer lists bookmarks as optional; '
-      + 'this fixture exists to flip exactly that and has nothing to flip');
-  }
-  manifest.permissions = [...manifest.permissions, 'bookmarks'];
-  manifest.optional_permissions = manifest.optional_permissions.filter((p) => p !== 'bookmarks');
-  if (manifest.optional_permissions.length === 0) delete manifest.optional_permissions;
-  fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
-  return dir;
-}
-
-// Overriding `context` is enough: `serviceWorker`, `extensionId` and `harness` are all
-// derived from it, so the whole two-window harness comes along unchanged.
-const granted = test.extend({
-  grantedExt: [async ({}, use, workerInfo) => {
-    await use(buildGrantedExtension(path.join(OUT, `ext-bookmarks-granted-${workerInfo.workerIndex}`)));
-  }, { scope: 'worker' }],
-
-  context: async ({ headed, grantedExt }, use) => {
-    const { context } = await launchExtensionContext({ headed, extDir: grantedExt });
-    await use(context);
-    await context.close();
-  },
-});
-
-/**
- * Build a bookmark tree under the Bookmarks bar, from the service worker.
- *
- * `getChildren('0')[0]` is the bar — the same way the panel finds it, and for the same
- * reason: `folderType` and `ROOT_NODE_ID` are newer than `minimum_chrome_version: 120`.
- *
- * @param {import('@playwright/test').Worker} sw
- * @param {Array<{ title: string, url?: string, children?: Array<{title:string,url:string}> }>} spec
- */
-function seedBookmarks(sw, spec) {
-  return swEval(sw, async (items) => {
-    const roots = await chrome.bookmarks.getChildren('0');
-    const bar = roots.find((n) => !('url' in n));
-    const made = {};
-    for (const item of items) {
-      if (item.url) {
-        const node = await chrome.bookmarks.create({ parentId: bar.id, title: item.title, url: item.url });
-        made[item.title] = node.id;
-        continue;
-      }
-      const folder = await chrome.bookmarks.create({ parentId: bar.id, title: item.title });
-      made[item.title] = folder.id;
-      for (const child of item.children || []) {
-        const node = await chrome.bookmarks.create({
-          parentId: folder.id, title: child.title, url: child.url,
-        });
-        made[child.title] = node.id;
-      }
-    }
-    return { barId: bar.id, ids: made };
-  }, spec);
-}
-
-/** The rows on screen, in order, with what each one is. */
-function rows(panel) {
-  return panel.evaluate(() => [...document.querySelectorAll('[data-testid="bookmark-row"]')]
-    .map((el) => ({
-      id: el.dataset.bookmarkId,
-      kind: el.dataset.kind,
-      text: (el.querySelector('.w-row__main') || {}).textContent || '',
-      open: el.dataset.openTab ? Number(el.dataset.openTab) : null,
-      depth: Number(el.dataset.depth),
-      bar: Number(el.dataset.bar),
-      expanded: el.getAttribute('aria-expanded'),
-    })));
-}
-
-/**
- * Click the first row whose main text contains `text`, case-insensitively — `hasText` is
- * a substring match, not an exact one. The click waits for the row to be actionable, NOT
- * for the repaint it starts, so every caller polls for what it expects afterwards.
- */
-async function clickRow(panel, text) {
-  const row = panel.locator('[data-testid="bookmark-row"]', { hasText: text })
-    .filter({ has: panel.locator('.w-row__main', { hasText: text }) })
-    .first();
-  await expect(row).toBeVisible({ timeout: 10_000 });
-  await row.click();
-  return row;
-}
-
 /** The header: the column's name, and whether anything is open below it. */
 function header(panel) {
   return panel.evaluate(() => {
@@ -647,15 +683,6 @@ function header(panel) {
       listRole: list ? list.getAttribute('role') : null,
     };
   });
-}
-
-/** Switch the column on and wait for the first folder to arrive. */
-async function showBookmarks(panel, serviceWorker) {
-  await setSettings(serviceWorker, { refreshInterval: 'off', railMode: 'bookmarks' });
-  // The header, not the list: an empty folder's list box has no height, and "visible"
-  // would then mean "has bookmarks in it" rather than "the column is up".
-  await expect(panel.locator('[data-testid="bookmark-head"]')).toBeVisible({ timeout: 20_000 });
-  await expect(panel.locator('[data-testid="bookmark-grant"]')).toHaveCount(0);
 }
 
 granted('a folder opens in place, and closing it puts the column back', async ({
@@ -904,7 +931,7 @@ granted('a bookmark already open activates that tab instead of opening a second 
   expect(after, 'the page was already open, so no second copy of it was made').toBe(before);
 });
 
-granted('the one write puts the active tab in the folder on screen', async ({
+granted('the bookmark button puts the active tab in the folder on screen', async ({
   harness, serviceWorker,
 }) => {
   granted.setTimeout(180_000);

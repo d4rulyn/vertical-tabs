@@ -49,6 +49,13 @@
   --vt-focus: #8ab4f8;
   --vt-warn-bg: #4a3a1a;
   --vt-close-hover-bg: rgba(255, 255, 255, .14);
+  /* The close button on a tab-group header (`.group-close`). Colours are themed in every
+     palette block below; the sizes are the card's own close button (18 px box, 12 px glyph)
+     and do not depend on the theme. */
+  --vt-group-close-fg: #ececec;
+  --vt-group-close-hover-bg: rgba(255, 255, 255, .14);
+  --vt-group-close-size: 18px;
+  --vt-group-close-icon: 12px;
   --vt-menu-bg: #3a3a3a;
   --vt-menu-hover: #4a4a4a;
   --vt-input-bg: #1f1f1f;
@@ -84,6 +91,24 @@
   --vt-group-bar: 3px;
   --vt-active-bar: 3px;
   --vt-list-padding: 8px;
+  /* The bookmark hover preview (bookmark-preview.js). Like every dimension here these do not
+     change with the theme, so they are defined once; its colours are the surface tokens above,
+     which all four palette blocks define. */
+  --vt-peek-z: 50;
+  --vt-peek-radius: 8px;
+  --vt-peek-ring: 1px;
+  --vt-peek-font-size: 11px;
+  --vt-peek-line-height: 1.3;
+  --vt-peek-none-gap: 6px;
+  --vt-peek-none-padding: 8px 12px;
+  --vt-peek-fav: 20px;
+  --vt-peek-hatch-line: 1px;
+  --vt-peek-hatch-gap: 7px;
+  --vt-peek-hint-lines: 4;
+  --vt-peek-cap-padding: 6px 8px 7px;
+  --vt-peek-title-lines: 2;
+  --vt-peek-host-gap: 1px;
+  --vt-peek-host-size: 10.5px;
 
   /* Column count (see the `.tablist` block). `data-columns` on <html> is written
      by `applySettingsAttrs()` and is the only thing that changes here. */
@@ -162,6 +187,8 @@
     --vt-focus: #1a73e8;
     --vt-warn-bg: #fff3cd;
     --vt-close-hover-bg: rgba(0, 0, 0, .10);
+    --vt-group-close-fg: #202020;
+    --vt-group-close-hover-bg: rgba(0, 0, 0, .10);
     --vt-menu-bg: #ffffff;
     --vt-menu-hover: #f0f0f0;
     --vt-input-bg: #ffffff;
@@ -210,6 +237,8 @@
   --vt-focus: #1a73e8;
   --vt-warn-bg: #fff3cd;
   --vt-close-hover-bg: rgba(0, 0, 0, .10);
+  --vt-group-close-fg: #202020;
+  --vt-group-close-hover-bg: rgba(0, 0, 0, .10);
   --vt-menu-bg: #ffffff;
   --vt-menu-hover: #f0f0f0;
   --vt-input-bg: #ffffff;
@@ -266,6 +295,8 @@
   --vt-focus: #8ab4f8;
   --vt-warn-bg: #4a3a1a;
   --vt-close-hover-bg: rgba(255, 255, 255, .14);
+  --vt-group-close-fg: #ececec;
+  --vt-group-close-hover-bg: rgba(255, 255, 255, .14);
   --vt-menu-bg: #3a3a3a;
   --vt-menu-hover: #4a4a4a;
   --vt-input-bg: #1f1f1f;
@@ -868,6 +899,40 @@ button {
   padding: 0 6px;
 }
 
+/* The close button on a group header: closes every tab of the group (group-close.js).
+   Same box and glyph as the card's own `.close`. It stays IN the row's flow, hidden by
+   `opacity` rather than `display`, so the title is truncated identically whether or not the
+   button is showing — one that appeared on hover would move the title each time the pointer
+   crossed the row. It shows on hover, whenever focus is anywhere in the header (the button
+   is in the Tab order, so a keyboard user always sees where focus is), and for any coarse
+   pointer: `hover: none` alone misses a touchscreen laptop (see `.card-head .close`), and a
+   control that closes tabs must not be tappable while invisible. */
+.group-close {
+  width: var(--vt-group-close-size);
+  height: var(--vt-group-close-size);
+  color: var(--vt-group-close-fg);
+  opacity: 0;
+  transition: opacity .1s, background-color .12s;
+}
+
+.group-close svg {
+  width: var(--vt-group-close-icon);
+  height: var(--vt-group-close-icon);
+}
+
+.group-close:hover {
+  background: var(--vt-group-close-hover-bg);
+  color: var(--vt-group-close-fg);
+}
+
+.group-header:hover .group-close,
+.group-header:focus-within .group-close,
+.group-close:focus-visible { opacity: 1; }
+
+@media (hover: none), (any-pointer: coarse) {
+  .group-close { opacity: 1; }
+}
+
 /* The cards inside a group use the same column count as the list. The group body
    is indented by the colour bar and its padding, so its `100%` is a few pixels
    narrower than the list's — it therefore degrades one step earlier, which is the
@@ -1296,8 +1361,8 @@ button {
    row of it. Hidden in `tools` mode, so the bottom bar's `space-between` layout and
    the panel's height budget are untouched for anyone who never turns bookmarks on.
 
-   `overflow-x: auto` rather than wrapping: nine tools plus the mode switch measure
-   316 px against the 344 px content box of Chrome's minimum 360 px panel, so the
+   `overflow-x: auto` rather than wrapping: nine tools compute to 284 px (9 x 28 plus
+   8 x 4 of gap) against the 344 px content box of Chrome's minimum 360 px panel, so the
    scroll only ever appears if a future build adds tools, and when it does the strip
    keeps its one-row height instead of eating the tab list. */
 .toolstrip {
@@ -1322,27 +1387,6 @@ button {
 .toolstrip__tool[aria-expanded="true"] {
   background: var(--vt-menu-hover);
   color: var(--vt-text);
-}
-
-/* The way back to the tools, held apart from the tools themselves. The rule is drawn
-   outside the button so the 28 px hit target and the centred glyph are unaffected. */
-.toolstrip__mode {
-  margin-inline-start: auto;
-  position: relative;
-}
-
-/* With every tool unticked the switch is the only thing on the strip, and a rule with
-   nothing to its left is a rule dividing the strip from the edge of the panel. */
-.toolstrip__mode:first-child::before { content: none; }
-
-.toolstrip__mode::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: -5px;
-  top: 6px;
-  bottom: 6px;
-  width: 1px;
-  background: var(--vt-divider);
 }
 
 /* ── Bottom bar ───────────────────────────────────────────────────────────── */
@@ -1491,7 +1535,10 @@ button {
 
 .confirm {
   position: fixed;
-  z-index: 65;
+  /* Above .drawer (70), below .toast (80). The settings drawer covers the whole panel and asks its
+     "Delete all saved previews?" HERE, so at 65 the question was drawn under the drawer and a click
+     on Cancel or OK landed on the drawer. */
+  z-index: 75;
   left: 0;
   right: 0;
   bottom: 0;
@@ -1513,10 +1560,10 @@ button {
   z-index: 80;
   left: 50%;
   bottom: calc(var(--vt-bar-height) + 8px);
-  /* One bar's worth of clearance by default. In bookmarks mode the tool strip is a
-     second bar of the same height above the first, and 48 px would put the toast — 31 px
-     of it — straight across the strip's buttons, including the one that says
-     "Bookmarked." right after it was pressed. */
+  /* One bar's worth of clearance by default. In bookmarks mode WITH tools ticked the
+     strip is a second bar of the same height above the first, and 48 px would put the
+     toast — 31 px of it — straight across the strip's buttons, including the one that
+     says "Bookmarked." right after it was pressed. */
   transform: translateX(-50%);
   max-width: calc(100% - 24px);
   padding: 7px 12px;
@@ -1528,10 +1575,11 @@ button {
   text-align: center;
 }
 
-/* `:has()` rather than a class the JS has to remember to keep in sync: the strip's own
-   `hidden` attribute is already the single answer to "is the column showing bookmarks",
-   and Chrome has supported this selector since 105 against a `minimum_chrome_version`
-   of 120. */
+/* `:has()` rather than a class the JS has to remember to keep in sync. What is being
+   asked is "is there a second bar in the way", which is the strip's own `hidden` and NOT
+   "is the column showing bookmarks" — those parted company when the strip started
+   hiding itself with no tools in it. Chrome has supported this selector since 105
+   against a `minimum_chrome_version` of 120. */
 body:has(#tool-strip:not([hidden])) .toast {
   bottom: calc(var(--vt-bar-height) * 2 + 8px);
 }
@@ -2136,6 +2184,99 @@ body:has(#tool-strip:not([hidden])) .toast {
   background: var(--vt-accent);
 }
 
+/* ── The hover preview (bookmark-preview.js) ────────────────────────────────
+   One card under <body> while the pointer rests on a bookmark. `position: fixed` and
+   `pointer-events: none`: it takes part in no layout, so the tab list, the column and the
+   row that holds them keep their boxes, and the pointer still reaches whatever is beneath
+   it. Below the context menu (60) and the confirm bar (75). Colours are only tokens the menus
+   and the thumbnails already use, so the light and dark palettes come with them; every size
+   is a `--vt-peek-*` token in the Dimensions group of `:root`. */
+.bmk-peek {
+  position: fixed;
+  z-index: var(--vt-peek-z);
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: var(--vt-peek-radius);
+  background: var(--vt-menu-bg);
+  color: var(--vt-text);
+  /* A ring rather than a border, so the picture is exactly as wide as the box it was sized to. */
+  box-shadow: 0 0 0 var(--vt-peek-ring) var(--vt-card-border), var(--vt-shadow);
+  font-size: var(--vt-peek-font-size);
+  line-height: var(--vt-peek-line-height);
+}
+
+.bmk-peek__shot {
+  position: relative;
+  display: grid;
+  background-color: var(--vt-thumb-bg);
+}
+
+/* The same crop a tab card gives the same picture: filled, from the top. */
+.bmk-peek__img {
+  grid-area: 1 / 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+/* No picture. The tab card's own "deliberately nothing here" surface, with the page's
+   favicon and the reason in a sentence, so the silence does not read as a bug. */
+.bmk-peek__none {
+  grid-area: 1 / 1;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--vt-peek-none-gap);
+  padding: var(--vt-peek-none-padding);
+  text-align: center;
+  background-color: var(--vt-thumb-blocked-bg);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--vt-thumb-blocked-hatch) 0 var(--vt-peek-hatch-line),
+    transparent var(--vt-peek-hatch-line) var(--vt-peek-hatch-gap)
+  );
+  color: var(--vt-thumb-blocked-fg);
+}
+
+.bmk-peek__fav {
+  width: var(--vt-peek-fav);
+  height: var(--vt-peek-fav);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: .8;
+}
+
+.bmk-peek__hint {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--vt-peek-hint-lines);
+}
+
+.bmk-peek__cap { padding: var(--vt-peek-cap-padding); }
+
+.bmk-peek__title {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--vt-peek-title-lines);
+}
+
+.bmk-peek__host {
+  margin-top: var(--vt-peek-host-gap);
+  overflow: hidden;
+  color: var(--vt-text-muted);
+  font-size: var(--vt-peek-host-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Asking for the permission ──────────────────────────────────────────────
    The whole column, because there is nothing else to show until the answer comes. */
 .bmk-grant {
@@ -2172,6 +2313,74 @@ body:has(#tool-strip:not([hidden])) .toast {
   text-align: left;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ── Folder editing (bookmarks.js, "Editing a name") ─────────────────────────
+   The header's "new folder" button needs nothing here: it is an `.iconbtn` in `.bmk__head`
+   and takes that rule's 22 px box and its disabled look. What is added is the row in which
+   a folder is named or a node renamed. It repeats `.bmk-row`'s indentation and stripe (its
+   `data-depth` and `data-bar` are set the same way) and the glyphs of the row it stands for
+   or turns into, so nothing moves when the real row replaces it. Colours are only tokens that all four
+   palette blocks at the top of this file define, so the light and dark palettes come with
+   them; the one size is a custom property. The focus ring is the global `:focus-visible`
+   one, pulled inside the box so the rail's edge does not clip it. */
+.bmk-row--edit {
+  --vt-bmk-edit-height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-right: 5px;
+  color: var(--vt-text);
+  font-size: 11px;
+  cursor: default;
+}
+
+.bmk-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--vt-bmk-edit-height);
+  padding: 0 4px;
+  border: 1px solid var(--vt-input-border);
+  border-radius: 3px;
+  background: var(--vt-input-bg);
+  color: var(--vt-text);
+  font: inherit;
+}
+.bmk-rename:focus-visible { outline-offset: -1px; }
+/* Between Enter and the answer: the name is final. */
+.bmk-rename[readonly] { opacity: .7; }
+/* A folder being renamed keeps the state it is in: a real row turns its twisty with
+   `aria-expanded`, which a plain `div` must not carry. */
+.bmk-row--edit[data-open] .bmk-row__twisty { transform: rotate(90deg); }
+
+/* ── Dragging bookmarks (bookmark-dnd.js) ─────────────────────────────────────
+   Three marks, all with their own class names: `dnd.js` strips `.is-dragging` from every element
+   on any `dragend`, so a mark of that name would be gone before a test could look at it. The line
+   goes where a drop would put the row before or after another; a folder's "inside" is an outline
+   on its row. The line is `position: fixed` and takes no part in layout, like the tab list's, so
+   no box in the panel moves while it shows. Only tokens every palette block defines, so light and
+   dark come with them; the one size is a custom property. */
+.bmk-drop-indicator {
+  --vt-bmk-drop-line: 2px;
+  position: fixed;
+  z-index: 40;
+  height: var(--vt-bmk-drop-line);
+  background: var(--vt-accent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+/* The row being carried, dimmed as a tab card is. */
+.bmk-row.is-bmk-dragging { opacity: .4; }
+
+/* "Inside this folder": an outline and nothing else. Specific enough to win over the focus ring. */
+.bmk-row.is-bmk-drop-into:not(:disabled),
+.bmk-empty-row.is-bmk-drop-into {
+  outline: 2px solid var(--vt-accent);
+  outline-offset: -2px;
 }
 
 /* The notes pad takes whatever height is left over, so the column ends at the bottom

@@ -1,5 +1,11 @@
 /**
- * The tool strip, and the switch between the two things the side column can be.
+ * The tool strip: where the tools go while the side column belongs to the bookmarks.
+ *
+ * The switch between the two is NOT here. It is `#btn-rail-mode` in the topbar, which
+ * sits in the same place in both modes and is never hidden, so the one ALWAYS-VISIBLE
+ * switch does not move or disappear when the mode changes. The settings drawer's
+ * `railMode` select writes the same setting; that one is the way in, not a control the
+ * user has to find their way back out with.
  *
  * `settings.railMode` decides what the column beside the tabs holds. In `tools` — what
  * every install has had so far — nothing here is on screen at all: the strip is
@@ -27,15 +33,11 @@
 import * as i18n from '../common/i18n.js';
 import * as log from '../common/log.js';
 import * as widgets from './widgets.js';
-import { saveSettings } from '../common/settings.js';
 
 const t = (key, subs) => i18n.t(key, subs);
 
 /** Any widget that declares no `iconId`; a tool is still reachable without a glyph. */
 const FALLBACK_ICON = 'i-tool';
-
-/** Stands for the mode switch in the focus bookkeeping; never a widget id. */
-const MODE_TOGGLE = '#mode';
 
 /* ── state ────────────────────────────────────────────────────────────────── */
 
@@ -50,9 +52,10 @@ let bookmarkRail = null;
 /** The ids currently drawn in the strip, in order. */
 let order = [];
 /**
- * The mode the strip was last built for, or `null` before the first build. Tracked
- * beside `order` because the two states "tools, no ticks" and "bookmarks, no ticks" have
- * the same empty `order` and want opposite answers to "is the strip on screen".
+ * The mode the strip was last built for, or `null` before the first build. Both
+ * no-tick states now hide the strip, so this no longer separates them. It is kept for
+ * the FIRST call: without it `sameOrder([], [])` early-returns and `strip.hidden` is
+ * never written, leaving the markup's own `hidden` to be right by luck.
  * @type {boolean|null}
  */
 let stripMode = null;
@@ -120,12 +123,11 @@ export function apply(settings) {
   stripMode = bookmarksMode;
   strip.textContent = '';
   for (const id of wanted) strip.append(buildButton(id));
-  // The switch back is on the strip whenever the column belongs to the bookmarks, tools
-  // or no tools. Unticking every tool is a documented way to use the panel ("Untick them
-  // all to hide the column"), and it must not also be the way to get stuck in a mode
-  // whose only in-panel exit is this button.
-  if (bookmarksMode) strip.append(buildModeToggle());
-  strip.hidden = !bookmarksMode;
+  // Tools, and nothing else. The way back is `#btn-rail-mode` in the topbar, so the
+  // strip no longer carries a switch of its own that would vanish the moment the column
+  // changed. With no tool ticked there is nothing to put here, and an empty bar above
+  // the bottom bar is only height — hide it and let the tab list have the rows.
+  strip.hidden = !bookmarksMode || wanted.length === 0;
   if (refocus) restoreStripFocus(refocus);
 }
 
@@ -133,7 +135,7 @@ export function apply(settings) {
  * Which strip button should have focus after a rebuild, or `null` when focus is nowhere
  * near the strip and must not be moved.
  *
- * @returns {string|null} a `data-tool` id, `MODE_TOGGLE`, or null
+ * @returns {string|null} a `data-tool` id, or null
  */
 function focusedTool() {
   if (!strip) return null;
@@ -143,22 +145,20 @@ function focusedTool() {
   const active = document.activeElement;
   if (!(active instanceof HTMLElement) || !strip.contains(active)) return null;
   const button = active.closest('[data-tool]');
-  return button instanceof HTMLElement ? (button.dataset.tool || MODE_TOGGLE) : MODE_TOGGLE;
+  return button instanceof HTMLElement ? (button.dataset.tool ?? null) : null;
 }
 
 /**
- * Put focus back on the rebuilt strip. A hidden or emptied strip has nothing to give it
- * to — switching to `tools` is exactly that case, and the tools are in the rail by then
- * — so focus is left where the browser put it rather than moved somewhere arbitrary.
+ * Put focus back on the rebuilt strip. A hidden or emptied strip has nothing to give
+ * it to, so focus is left where the browser put it rather than moved somewhere
+ * arbitrary. Switching to `tools` is that case and the tools are in the rail by then;
+ * so is unticking the last tool while in bookmarks, where focus does land on <body>.
  *
- * @param {string} id a `data-tool` id or `MODE_TOGGLE`
+ * @param {string} id a `data-tool` id
  */
 function restoreStripFocus(id) {
   if (!strip || strip.hidden) return;
-  const wanted = id === MODE_TOGGLE
-    ? strip.querySelector('.toolstrip__mode')
-    : strip.querySelector(`[data-tool="${id}"]`);
-  const next = wanted || strip.querySelector('button');
+  const next = strip.querySelector(`[data-tool="${id}"]`) || strip.querySelector('button');
   if (!(next instanceof HTMLElement)) return;
   try {
     next.focus({ preventScroll: true });
@@ -191,46 +191,6 @@ function buildButton(id) {
     toggleSheet(id, button);
   });
   return button;
-}
-
-/**
- * The way back. Getting to the bookmarks costs a trip into the drawer once; getting
- * out of them should not, so the switch sits at the end of the strip, next to the
- * tools it puts back in the column.
- *
- * @returns {HTMLButtonElement}
- */
-function buildModeToggle() {
-  const label = t('railSwitchToTools');
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'iconbtn toolstrip__mode';
-  button.dataset.testid = 'rail-mode-toggle';
-  button.setAttribute('aria-label', label);
-  button.title = label;
-  button.append(glyph('i-tool'));
-  button.addEventListener('click', (event) => {
-    event.preventDefault();
-    // Close first: the tools are about to be mounted in the rail, and the same widget
-    // running in two places writes over itself.
-    closeSheet();
-    void setRailMode('tools');
-  });
-  return button;
-}
-
-/**
- * @param {'tools'|'bookmarks'} mode
- * @returns {Promise<void>}
- */
-async function setRailMode(mode) {
-  try {
-    // Written to storage, not to a local copy: `storage.onChanged` is what tells the
-    // rail, the strip and the settings drawer at once, in every open panel.
-    await saveSettings({ railMode: mode });
-  } catch (e) {
-    log.warn('railMode', e);
-  }
 }
 
 /** @param {string} href a symbol id from the inline sprite, without the `#` */

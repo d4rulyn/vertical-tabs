@@ -17,16 +17,20 @@ it is rejected. This is the sentence everything else has to be consistent with:
 > Show, in the side panel, the lists a user opens a page from — the browser's open tabs as
 > a vertical list with a preview image of each page and the controls to manage them, and,
 > in the column beside it, the user's saved bookmarks when they choose that layout, as a
-> list to browse, to open from, and to add the current tab to.
+> list to browse, to open from, to add the current tab to, and to organise: create folders,
+> rename, reorder and move bookmarks and folders.
 
 参考訳（ダッシュボードに入れるのは上の英文ひとつ）:
 
 > ブラウザで開いているタブを、ページのプレビュー画像と操作を添えた縦一列のリストとして
 > サイドパネルに表示し、その横の列には、ユーザーがそのレイアウトを選んだときだけ、保存した
-> ブックマークを、たどって開いたり現在のタブを追加したりできる一覧として表示する —
-> 次に開くページを選ぶための場所です。
+> ブックマークを、たどって開いたり、現在のタブを追加したり、フォルダの作成・名前の変更・
+> 並べ替え・移動で整理したりできる一覧として表示する — 次に開くページを選ぶための場所です。
 
-It was widened for the bookmarks update; the old wording named only the tab list.
+It was widened for the bookmarks update; the old wording named only the tab list. It was
+widened a second time for 1.3.0 by the clause "and to organise: create folders, rename,
+reorder and move bookmarks and folders"; deleting, searching and editing an address are
+not in it because the column does none of them.
 `permissions.md` justifies each permission against this sentence, and
 `resubmission-note.md` records what the change means for the review.
 
@@ -87,12 +91,16 @@ MANAGING TABS, NOT JUST LISTING THEM
 BOOKMARKS IN THAT COLUMN INSTEAD, IF YOU WANT THEM
 
 The column beside the tab list holds those tools by default. Switch it to bookmarks and it
-becomes your own folders, one level at a time: click a row to open it, see a dot on
-anything already open in a tab, and press one button to bookmark the tab you are on.
+becomes your own folders as a tree you open and close in place: click a row to open it, see a dot on
+anything already open in a tab, and press one button to bookmark the tab you are on. You
+can also tidy the tree: make a new folder, rename a bookmark or a folder (F2), put the rows
+of a folder in order by dragging them, from the right-click menu or with Alt+Up and
+Alt+Down, and move a row into another folder by dragging it there or with the menu's
+Move to…, which puts it at the end of that folder.
 Chrome asks for the bookmarks permission at that moment rather than at install, and you
 can refuse it or take it back later. The extension reads your bookmarks to draw the list
-and does nothing else with them — no renaming, no deleting, no reordering. Switch back and
-your tools return exactly as you had them.
+and changes them only when you do one of those things — it never deletes anything. Switch
+back and your tools return exactly as you had them.
 
 IT DOES NOT TALK TO ANYTHING
 
@@ -169,11 +177,15 @@ Chrome はタブを横に並べ続け、やがてタイトルが読めなくな�
 同じ列にブックマークも出せます（切り替え式）
 
 タブ一覧の横にある列は、既定ではいま挙げたツールが並びます。ここをブックマークに切り替えると、
-自分のフォルダを一段ずつたどって開ける一覧になります。クリックで開き、すでに開いているページには
-印が付き、「このタブを追加」ボタンひとつで今見ているページを保存できます。ブックマークの権限を
-Chrome が尋ねるのは切り替えたそのときで、インストール時ではありません。断ることも、後から
-取り消すこともできます。拡張が行うのは一覧を描くための読み取りだけで、名前の変更・削除・
-並べ替えはしません。ツールに戻せば、選んでいたツールがそのまま復活します。
+自分のフォルダをその場で開閉できるツリーになります。クリックで開き、すでに開いているページには
+印が付き、「このタブをブックマーク」ボタンひとつで今見ているページを保存できます。フォルダを新しく
+作ったり、名前を変えたり（F2）することもできます。同じフォルダ内の並べ替えは、ドラッグ、右クリックの
+「上へ移動」「下へ移動」、Alt+↑／Alt+↓ のどれでもできます。別のフォルダへ移すのは、ドラッグか
+「移動先を選ぶ…」です（「移動先を選ぶ…」では、そのフォルダの末尾に入ります）。
+ブックマークの権限を Chrome が尋ねるのは切り替えたそのときで、
+インストール時ではありません。断ることも、後から取り消すこともできます。拡張がブックマークを
+書き換えるのは、いま挙げた操作をあなたが行ったときだけで、削除はしません。
+ツールに戻せば、選んでいたツールがそのまま復活します。
 
 どこにも通信しません
 
@@ -206,12 +218,58 @@ Chrome 120 以降が必要です。サイドパネルの左右と最小幅は Ch
 | Small promo tile | 440×280 PNG | optional; only needed to be featured |
 | Marquee promo tile | 1400×560 PNG | optional |
 
-Screenshots are regenerated with:
+Screenshots are built by `tests/specs/31-store-shots.spec.js` into the gitignored
+`tests/output/store-shots/`, and checked there. Replacing the committed images under
+`docs/store/screenshots/` is a separate, explicit step, so an ordinary suite run can no
+longer rewrite the listing's artwork — and a run that fails half way can no longer leave
+what it managed to draw behind as the artwork.
 
 ```
+# build and check only; nothing under docs/ is touched
 HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose -f tests/docker-compose.yml run --rm e2e \
   playwright test specs/31-store-shots.spec.js --reporter=line
+
+# build, check, and then replace docs/store/screenshots/ with the result
+HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose -f tests/docker-compose.yml run --rm \
+  -e STORE_SHOTS_PUBLISH=1 e2e \
+  playwright test specs/31-store-shots.spec.js --reporter=line
 ```
+
+The images are **not reproducible byte for byte**, so a publish run produces a diff even when
+nothing about the UI changed; review the images, not the diff stat. Over 18 clean runs of the
+spec, each compared pixel by pixel with the first (both languages), the previews, the layout and
+the captions never differed. What did:
+
+- the number on the trash badge at the bottom right. It is the length of the browser's
+  recently-closed list (`extension/sidepanel/trash.js`) and read 1 in 19 and 2 in 17 of the 36
+  scenes. Why it varies was not investigated;
+- the port in `127.0.0.1:<port>` under the cross-window result in `04-search.png`, which is
+  different every run;
+- specks of at most 12 pixels, at most one level per channel, along the edge of the search field
+  and of the tool cards in `02-tools-dark.png`.
+
+Earlier versions of the spec also produced previews that differed from run to run, and this
+paragraph used to put that down to "how far the page had painted when the capture fired". That
+was never measured. What was measured is described where it is handled in
+`tests/specs/31-store-shots.spec.js`: the stage page behind the panel opened on the same URL as a
+card, and closing it blanked that card (a flat block in 13 of 40 images over five runs, and in
+the committed `ja/01`, `ja/02` and `ja/03` before this change); the same page resized the window,
+so the product photographed the active card again, at the new size, a second or so after the
+stage closed; a preview could still be undecoded at the shutter, and the favicon of the
+cross-window result was missing from 4 of 24 scenes. The spec now waits for each and measures,
+in the PNG itself, two things over every preview box: whether the page's own accent colour is in
+it, and how much of it is the card's flat average colour, which is what the product paints where
+an image is not showing. A preview that is missing, or whose missing part shows that average
+colour, fails the run.
+
+What that does **not** catch: a preview that is wrong but not flat in the card's average colour.
+An independent review put each of these into the product and the gate stayed green, with images a
+person would call wrong: the lower 60% of every preview covered by a dark block; every preview
+stretched to one flat block of its page's accent; previews upside down; one card's preview
+replaced by a gradient; previews squashed into 15 to 31 px strips. Nor does the gate look at the
+sheet around the panel (which side the panel is on, a banner, a light panel in a dark shot, the
+card titles, the counter), and no test measures the images committed under `screenshots/`. So
+after a publish run, look at the eight images; the run being green is not that look.
 
 ## Fields that are a decision, not copy
 

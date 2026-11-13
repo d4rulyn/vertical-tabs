@@ -25,8 +25,13 @@ import {
   IDX_LAST_USED,
   IDX_CAPTURED,
   PRUNE,
+  TOUCH_FRESH_MS,
 } from './constants.js';
 import * as log from './log.js';
+
+// The freshness window of `touch()` is defined beside PRUNE in constants.js, where the reason for its value is
+// written. It is re-exported so that whoever already reads the store's names keeps reading this one from it.
+export { TOUCH_FRESH_MS };
 
 /** @type {Promise<IDBDatabase>|null} */
 let dbPromise = null;
@@ -225,6 +230,22 @@ export async function getThumbs(urlKeys) {
 /**
  * Refresh `lastUsedAt` for the keys currently on screen so `prune()` keeps
  * them. One read-write transaction for the whole batch.
+ *
+ * Rewriting a record rewrites its screenshot, so a record whose stamp is a number within
+ * `TOUCH_FRESH_MS` of `now` (on either side) is read and left as it is. A stamp of any other kind
+ * (missing, null, a string, a BigInt, a Date, NaN, an infinity) is replaced by `now`, and is never
+ * used in arithmetic. A key with no record costs nothing.
+ *
+ * Nothing calls this on a timer. The bookmark column touches the rows it draws when it attaches and
+ * after each paint chunk, and the row under the pointer on hover; the tab cards touch at panel boot and
+ * on `#tablist` scroll. Each caller keeps 30 s between two touches of its own, so 30 s is a floor, not a
+ * period.
+ *
+ * Why it is worth the condition: rewriting one record per row at every touch was found to stall the
+ * store for seconds to minutes. Probe 98a part C found the stall rate to follow the number of blobs
+ * rewritten (transactions of 16 rows stalled as often, per blob, as one of 1000); part D, in which touches
+ * of records without a blob never stalled (0 of 24 against 4 of 24), is suggestive only (Fisher p = 0.055).
+ * Probe 98b (Probe 18) measured the rate per rewrite again. None of that is a measurement of the hover.
  * @param {string[]} urlKeys
  * @param {number} [now]
  * @returns {Promise<void>} never rejects
@@ -239,7 +260,9 @@ export async function touch(urlKeys, now = Date.now()) {
       const request = store.get(key);
       request.onsuccess = () => {
         const record = request.result;
-        if (record) {
+        // `typeof` comes first: a stored stamp of another kind is written, never subtracted (a BigInt
+        // would throw in this handler and abort the whole batch). NaN and the infinities fail the `<`.
+        if (record && !(typeof record.lastUsedAt === 'number' && Math.abs(now - record.lastUsedAt) < TOUCH_FRESH_MS)) {
           record.lastUsedAt = now;
           store.put(record);
         }

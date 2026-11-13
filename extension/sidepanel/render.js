@@ -324,29 +324,36 @@ function updateTile(el, tab) {
 /* ── Tab list ────────────────────────────────────────────────────────────── */
 
 /**
- * Build the row plan: consecutive tabs sharing a group become one `.group`
- * section; everything else is a top-level card (spec §8.3).
+ * Build the row plan: the tabs of a group become one `.group` section; everything
+ * else is a top-level card (spec §8.3).
+ *
+ * Chrome keeps a group's tabs adjacent, so the tabs of a group are normally one run
+ * and the section sits where its first tab is. A model caught between two events can
+ * order them apart (Probe 10: a closing tab sorted into the middle of a group). The
+ * group still gets ONE row, at its first tab: two rows would share the key `g<id>`,
+ * and a keyed DOM has room for one element per key.
  * @param {boolean} pinnedInline
  * @returns {Array<{key: string, kind: 'card'|'group', tab?: chrome.tabs.Tab, groupId?: number, tabs?: chrome.tabs.Tab[]}>}
  */
 function buildRows(pinnedInline) {
   const rows = [];
-  let current = null;
+  /** @type {Map<number, {tabs: chrome.tabs.Tab[]}>} */
+  const groupRows = new Map();
   for (const tab of state.orderedTabs()) {
     if (tab.pinned && !pinnedInline) continue;
     const groupId = tab.pinned ? state.TAB_GROUP_ID_NONE : tab.groupId;
     const grouped =
       groupId !== undefined && groupId !== state.TAB_GROUP_ID_NONE && state.state.groups.has(groupId);
     if (grouped) {
-      if (current && current.groupId === groupId) {
-        current.tabs.push(tab);
-        continue;
+      let row = groupRows.get(groupId);
+      if (!row) {
+        row = { key: `g${groupId}`, kind: 'group', groupId, tabs: [] };
+        groupRows.set(groupId, row);
+        rows.push(row);
       }
-      current = { key: `g${groupId}`, kind: 'group', groupId, tabs: [tab] };
-      rows.push(current);
+      row.tabs.push(tab);
       continue;
     }
-    current = null;
     rows.push({ key: `c${tab.id}`, kind: 'card', tab });
   }
   return rows;
@@ -819,10 +826,18 @@ function reconcile(container, rows, create, update, remove) {
   if (!container) return;
   /** @type {Map<string, HTMLElement>} */
   const existing = new Map();
+  /**
+   * Further elements carrying a key that `existing` already holds. A Map keeps one
+   * per key, so before this list the others were neither reused nor removed and
+   * stayed in the DOM for good.
+   * @type {HTMLElement[]}
+   */
+  const twins = [];
   for (const child of [...container.children]) {
     const key = child.dataset ? child.dataset.vtKey : null;
-    if (key) existing.set(key, child);
-    else child.remove(); // stray node: not ours
+    if (!key) child.remove(); // stray node: not ours
+    else if (existing.has(key)) twins.push(child);
+    else existing.set(key, child);
   }
 
   let index = 0;
@@ -841,4 +856,11 @@ function reconcile(container, rows, create, update, remove) {
   }
 
   for (const el of existing.values()) remove(el);
+  // Twins go last: every live card has been through `thumbs.applyTo()` by now, so the registry already
+  // points at it. `remove()` is what every leaving card goes through; its `thumbs.unobserve()` gives
+  // back the one reference that card holds and forgets a registration only if it is still its own.
+  for (const el of twins) {
+    log.warn('render: removed a duplicate element for key', el.dataset.vtKey);
+    remove(el);
+  }
 }

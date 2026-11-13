@@ -17,7 +17,10 @@
  *
  *   {
  *     id,                 // stable key, stored in settings
- *     titleKey,           // i18n key for the heading, '' for no heading
+ *     titleKey,           // i18n key for the heading, '' for no heading in the rail.
+ *                         // The settings drawer also names the tool's tick from this,
+ *                         // and has no silent option, so a registered widget needs a
+ *                         // real key — i18n-parity.test.mjs fails an empty one.
  *     iconId,             // OPTIONAL sprite symbol id for the tool strip, e.g.
  *                         // 'i-clock'; a widget that omits it gets a generic glyph
  *     mount(body, ctx),   // fill `body`; may return a teardown function

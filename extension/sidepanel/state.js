@@ -346,37 +346,120 @@ const announced = new Set();
 /** The first pass is covered by the bootstrap's batched `thumbs.loadFor()`. */
 let bootstrapped = false;
 
-/** @returns {Promise<void>} */
 /**
- * Bumped by every authoritative write to the model — an incremental update from
- * a Chrome event, or a full `resyncNow()`. The pending-navigation watch below
- * snapshots it around its own async query so a result that raced an event can
- * be dropped instead of overwriting fresher data.
+ * Bumped by `applySnapshot()`, by `upsertTab()` when the tab is part of the model and by `removeTab()`
+ * when it was. `onActivated` and `onHighlighted` write the model without bumping it. The pending-navigation
+ * watch below snapshots it around its own async query so a result that raced one of those bumps is
+ * dropped instead of possibly overwriting fresher data; an `onActivated` or `onHighlighted` does not drop it. The
+ * snapshot clock below is a second clock with another job (ordering snapshots against events): it ticks
+ * for every `noteEvent()`, which includes `onActivated`, `onHighlighted`, `onDetached` and `onRemoved`.
  * @type {number}
  */
 let modelEpoch = 0;
 
+/**
+ * Ordering of full snapshots against everything else that writes the model (H2).
+ *
+ * `resyncNow()` reads Chrome and then replaces the whole model, but it reads over several awaits, and
+ * the resync timer is cleared BEFORE it awaits, so a second `resyncNow()` can start while the first is
+ * still in flight and the OLDER one can land LAST. A snapshot that was read before a `tabs.onRemoved`
+ * and applied after it brought the closed tab back as a card that nothing healed until the next
+ * structural event; a tab created, moved or updated in the same window was erased the same way.
+ *
+ * One clock orders all of it. It ticks when a snapshot STARTS and when an event writes the model:
+ *  - `lastEventAt`     the clock at the newest event-driven write (`noteEvent()`);
+ *  - `lastAppliedFrom` the clock at the START of the newest snapshot that was applied.
+ * A snapshot that started at `t` is stale if an event wrote the model after `t` (it may predate that
+ * event, and nothing tells it apart from one that does not) or if a snapshot that started after `t`
+ * was applied before it. A stale snapshot is never applied. Nor is the model left to the events alone:
+ * `onMoved`, `onAttached`, `onReplaced` and `tabGroups.*` write nothing to the tab model (`onReplaced` only
+ * moves the `announced` set and the thumbs bookkeeping), and the structural half of `onUpdated` stores only
+ * its payload (`upsertTab`), not the renumbering around it (Probe 12 A1: beta at index 2, tied with gamma,
+ * until the resync); they rely on a resync for the new state. An `onUpdated` with `index < 0` writes nothing
+ * either, but the removal that follows does and its resync is a backstop. So after an event-stale snapshot
+ * `resyncNow()` reads again (waiting out the throttle) until one lands with no event in between. A snapshot
+ * that lost to a NEWER snapshot is dropped without reading again: that one started later, so it supersedes
+ * it (if `tabs.query` and `tabGroups.query` answer in call order, which no probe has measured), and each
+ * event after it either wrote the model itself, started a resync of its own or had nothing to write.
+ *
+ * Applying a snapshot is not an event, so two snapshots that overlap do not invalidate each other.
+ */
+let snapshotClock = 0;
+let lastEventAt = 0;
+let lastAppliedFrom = 0;
+
+/** Record that an event just wrote (or implies a write to) the model, so a snapshot read earlier is stale. */
+function noteEvent() {
+  lastEventAt = ++snapshotClock;
+}
+
+/**
+ * What the ordering above has done, for diagnostics and for the tests that need to see it happen.
+ * `retriesMax` is the largest number of snapshots one `resyncNow()` had to discard: a stream of events
+ * denser than a read keeps discarding them, and this is the number that shows it.
+ */
+export const resyncStats = { applied: 0, discardedForEvent: 0, droppedForNewer: 0, retriesMax: 0 };
+
+/**
+ * Replace the model with a fresh snapshot of the panel's window. Normally resolves once the model reflects
+ * Chrome: a snapshot that an event overtook is read again, so this never returns with a discarded one
+ * standing in. Four exits apply nothing: `tabs.query` rejecting (logged, not retried), the panel's window
+ * having changed during the read, a newer snapshot having been applied first (this one is dropped, see the
+ * ordering above) and, after a discarded snapshot waited out the throttle, a snapshot that started after
+ * the last event having landed meanwhile (not read again).
+ * @returns {Promise<void>}
+ */
 async function resyncNow() {
-  lastResyncAt = Date.now();
-  const windowId = state.windowId;
-  let tabs = [];
-  let groups = [];
-  try {
-    tabs = await chrome.tabs.query({ windowId });
-  } catch (e) {
-    log.warn('tabs.query', e);
+  for (let attempt = 1; ; attempt += 1) {
+    lastResyncAt = Date.now();
+    const windowId = state.windowId;
+    const startedAt = ++snapshotClock;
+    let tabs = [];
+    let groups = [];
+    try {
+      tabs = await chrome.tabs.query({ windowId });
+    } catch (e) {
+      log.warn('tabs.query', e);
+      return;
+    }
+    if (chrome.tabGroups && typeof chrome.tabGroups.query === 'function') {
+      try {
+        groups = await chrome.tabGroups.query({ windowId });
+      } catch (e) {
+        log.warn('tabGroups.query', e);
+        groups = [];
+      }
+    }
+    if (state.windowId !== windowId) return; // window changed under us
+
+    if (lastAppliedFrom > startedAt) {
+      resyncStats.droppedForNewer += 1;
+      log.debug('resync: snapshot dropped, a newer one was applied first', { startedAt, lastAppliedFrom, attempt });
+      return;
+    }
+    if (lastEventAt > startedAt) {
+      resyncStats.discardedForEvent += 1;
+      resyncStats.retriesMax = Math.max(resyncStats.retriesMax, attempt);
+      const detail = { startedAt, lastEventAt, attempt };
+      if (attempt % 10 === 0) log.warn('resync: snapshot discarded again, events keep landing while it is read', detail);
+      else log.debug('resync: snapshot discarded, an event wrote the model after it started', detail);
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, lastResyncAt + RESYNC_THROTTLE_MS - Date.now())));
+      // Another resync that started after the last event may have landed while this one waited.
+      if (lastAppliedFrom > lastEventAt) return;
+      continue;
+    }
+    lastAppliedFrom = startedAt;
+    resyncStats.applied += 1;
+    applySnapshot(tabs, groups);
     return;
   }
-  if (chrome.tabGroups && typeof chrome.tabGroups.query === 'function') {
-    try {
-      groups = await chrome.tabGroups.query({ windowId });
-    } catch (e) {
-      log.warn('tabGroups.query', e);
-      groups = [];
-    }
-  }
-  if (state.windowId !== windowId) return; // window changed under us
+}
 
+/**
+ * @param {chrome.tabs.Tab[]} tabs
+ * @param {chrome.tabGroups.TabGroup[]} groups
+ */
+function applySnapshot(tabs, groups) {
   const nextTabs = new Map();
   const nextOrder = [];
   const highlighted = new Set();
@@ -429,6 +512,7 @@ async function resyncNow() {
  */
 function upsertTab(tab, inserted = false) {
   if (!tab || tab.windowId !== state.windowId) return false;
+  noteEvent();
   // Applied even for the panel's own tab: it is excluded from the model but
   // still occupies a Chrome index.
   if (inserted) shiftIndices(tab.index, 1, tab.id);
@@ -486,7 +570,9 @@ function reorderFromIndex() {
  * @param {number} [exceptTabId]
  */
 function shiftIndices(from, delta, exceptTabId) {
-  if (!Number.isInteger(from)) return;
+  // -1 is "not in the strip", not a position: `tab.index > -1` is true of every tab, so a removal
+  // "at -1" would move the whole strip down by one (Probe 10/11).
+  if (!Number.isInteger(from) || from < 0) return;
   for (const tab of state.tabs.values()) {
     if (tab.id === exceptTabId) continue;
     if (delta > 0 ? tab.index >= from : tab.index > from) tab.index += delta;
@@ -507,6 +593,7 @@ function removeTab(tabId) {
   if (state.activeTabId === tabId) state.activeTabId = null;
   thumbs.onTabRemoved(tabId);
   modelEpoch += 1;
+  noteEvent();
   return true;
 }
 
@@ -539,7 +626,7 @@ function removeTab(tabId) {
  *    anything, which stays the job of the events and of `resync()`;
  *  - folds only the fields Chrome does not push (`status`, `pendingUrl`,
  *    `discarded`, `frozen`), so indices, grouping and activation are untouched;
- *  - drops its own result if any event landed while the query was in flight;
+ *  - drops its own result if a write that bumps `modelEpoch` landed while the query was in flight;
  *  - renders only when a value actually changed, so an idle window produces no
  *    DOM writes and no needless `search.js` mutation wake-ups.
  */
@@ -580,8 +667,9 @@ export async function reconcileTabStatuses() {
   const epoch = modelEpoch;
   try {
     const live = await chrome.tabs.query({ windowId });
-    // An event that landed while the query was in flight is newer than what we
-    // just read, so this snapshot is dropped rather than written back.
+    // A write that bumped modelEpoch (a snapshot, `upsertTab`, `removeTab`) landed while the query was in
+    // flight and may be newer than what we just read (nothing tells which), so this snapshot is dropped
+    // rather than written back.
     if (state.windowId !== windowId || modelEpoch !== epoch) return;
     let changed = false;
     for (const fresh of live) {
@@ -640,6 +728,23 @@ export function registerChromeEvents() {
 
   chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
     if (!tab || tab.windowId !== state.windowId) return;
+    // A tab on its way out of the list can send tabs.onUpdated shortly before the event that removes it
+    // (0.2-83 ms across Probe 10/11/12), with {index: -1, groupId: -1}. Measured, with every close made by
+    // chrome.tabs.remove: a closing grouped tab, a closing pinned tab and a tab of a collapsed group (status
+    // 'unloaded', then tabs.onRemoved), and, by tabs.move and windows.create (not by mouse drag), a tab moved
+    // to another window (status 'complete', the OLD windowId, then tabs.onDetached). A closing unpinned loose
+    // tab sends none (Probe 11). Neither value says where the tab WAS, and storing them would corrupt the
+    // model: that tab sorts first at -1 when alone (Probe 11; next to a survivor that also reads -1 it ties,
+    // Probe 10), and the removal that follows used to shift every later index by that -1 (shiftIndices now
+    // ignores a negative `from`), so the survivors read -1, 0, 1, ... (Probe 10). Before buildRows drew a group
+    // as one row (A36), a render in that window also split their group in two (Probe 10: Work at the left
+    // edge, two tabs of another group closed in one call; other layouts unmeasured). The record the model
+    // already holds is the better one and the event that follows is about to remove it; Chrome is asked again
+    // in case it never does.
+    if (tab.index < 0) {
+      void resync();
+      return;
+    }
     // A tab the model has never seen (it was the panel's own page, or an event
     // was missed) needs Chrome's indices, not local arithmetic.
     const firstSight = !state.tabs.has(tabId);
@@ -655,6 +760,7 @@ export function registerChromeEvents() {
 
   chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
     if (windowId !== state.windowId) return;
+    noteEvent();
     state.activeTabId = tabId;
     state.unread.delete(tabId);
     const tab = state.tabs.get(tabId);
@@ -668,6 +774,7 @@ export function registerChromeEvents() {
 
   chrome.tabs.onHighlighted.addListener(({ windowId, tabIds }) => {
     if (windowId !== state.windowId) return;
+    noteEvent();
     state.highlighted = new Set((tabIds || []).filter((id) => state.tabs.has(id)));
     scheduleRender();
   });
@@ -684,6 +791,7 @@ export function registerChromeEvents() {
 
   chrome.tabs.onDetached.addListener((tabId, info) => {
     if (info.oldWindowId !== state.windowId) return;
+    noteEvent(); // even when the tab was never modelled: an older snapshot may still list it
     removeTab(tabId);
     scheduleRender();
   });
@@ -701,6 +809,7 @@ export function registerChromeEvents() {
     // and a stale lock would otherwise be handed to whatever tab inherits this one.
     locks.forget(tabId);
     if (info && info.windowId !== undefined && info.windowId !== state.windowId) return;
+    noteEvent(); // even when the tab was never modelled: an older snapshot may still list it
     if (!removeTab(tabId)) return;
     emit('tab-removed', tabId);
     scheduleRender();

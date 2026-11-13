@@ -71,11 +71,34 @@ with **Load unpacked**.
   itself, with everything else still on screen, and each bar's rows carry a stripe in its
   own colour so two folders with the same name are still told apart. A dot marks anything
   already open in a tab, and clicking that row goes to the tab instead of opening a second
-  copy. One button bookmarks the tab you are on, into the folder you have open. This is the
+  copy. One button bookmarks the tab you are on, into the folder you last opened by clicking it. You can
+  also tidy the tree from the column. The button beside it makes a new folder in that same
+  folder (both buttons are greyed out when no folder is open, and again once that folder is
+  closed, is hidden inside a folder you closed, or is closed by *Close every folder*). A
+  folder that opens by itself after a move, after *Move to…* or for a new folder's name field
+  does not become that folder. The folder is named in a text field in the list: Enter creates it
+  (an untouched name makes "New folder"), Escape creates nothing, and clicking elsewhere in the panel saves it only if you
+  have changed the text (an emptied name creates nothing). Switching to another window saves nothing: the
+  field stays open with what you typed, and if it still has focus when you come back, Enter creates the folder
+  and Escape closes it without one. If something else takes the focus while you are away (the shortcut that
+  focuses the search box does), coming back saves a changed name instead of leaving the field open; an
+  unchanged or emptied name just closes it. Closing the panel while the field is open (the toolbar icon, the
+  shortcut, or moving the panel to the other side of the window) saves nothing either, and shows no message.
+  **F2** renames the focused
+  bookmark or folder. Inside a folder, rows are put in order by dragging them, from the
+  right-click menu (*Move up*, *Move down*; the menu key and `Shift+F10` open it too), or
+  with `Alt+ArrowUp` / `Alt+ArrowDown`. A row goes into another folder by dragging it
+  there or with the menu's *Move to…*, which puts it at the end of the folder you pick.
+  While you drag, a line shows where a row will land and an outline shows that it will go
+  *into* a folder (the bottom quarter of an open folder's row also means "first child"
+  and is drawn as a line). Chrome's own top-level folders, such as the bookmarks bar, can
+  be dropped into but not renamed or moved. A folder that is managed by policy cannot be
+  dropped into. This is the
   one feature that does ask for a permission the previews did not already require, and it
   asks the first time you switch to it, never at install: `bookmarks` is declared in
-  `optional_permissions`. Apart from that one button it is read-only — no renaming, no
-  deleting, no reordering, no dragging between the two lists. Switching back restores your
+  `optional_permissions`. Nothing can be deleted from the column and there is no undo (use
+  Chrome's own bookmark manager, `chrome://bookmarks`, for that), and there is no dragging
+  between the two lists. Switching back restores your
   tools exactly as they were, because the tool list itself is never rewritten.
 - **Lock a tab**: right-click, *Lock this tab*. A locked tab **cannot be closed from this
   panel** — not by the card's close button, not by *Close tab*, not by *Close the other
@@ -191,6 +214,7 @@ horizontal tab strip either — no extension API exists for that.
 | Click | group header | Collapse or expand the group. |
 | Double click | group title | Rename the group. |
 | Click | group colour swatch | Pick one of Chrome's nine group colours. |
+| Click | the × on a group header | Close every tab in the group. Asks first when the group has at least as many tabs as "Ask before closing this many tabs at once" (Settings). |
 | Click / middle click | **+** at the bottom | New tab in the foreground / in the background. |
 | Click | the trash icon | Recently closed tabs. |
 | Click | the gear icon | Settings. |
@@ -296,7 +320,7 @@ The Shortcuts section shows the current key bindings and links to
 | `favicon` | Falls back to Chrome's favicon service while a page is still loading. | none |
 | `alarms` | The periodic preview refresh and the cache maintenance job. | none |
 | `scripting` | Reads the scroll offset when **Previews show** is set to the top of the page. The one value read is `window.scrollY`; nothing is written to the page. | — (not verified on a real install) |
-| `optional_permissions: bookmarks` | The bookmarks layout of the side column. Reads the tree to draw the list; the only write is *Bookmark this tab*. **Optional** — not in `permissions`, so it is not requested at install, and never requested at all unless you switch that column to bookmarks and press its grant button. | none at install. The runtime prompt shown when you grant it: — (not read on real Chrome yet) |
+| `optional_permissions: bookmarks` | The bookmarks layout of the side column. Reads the tree to draw the list. Writes only when you press a button or act on a row: *Bookmark this tab*, a new folder (the name you type, or "New folder"), a rename, and moving a row (drag, menu or `Alt+ArrowUp` / `Alt+ArrowDown`); it never deletes. **Optional** — not in `permissions`, so it is not requested at install, and never requested at all unless you switch that column to bookmarks and press its grant button. | none at install. The runtime prompt shown when you grant it: — (not read on real Chrome yet) |
 
 Deliberately **not** requested: `activeTab`, content scripts, `contextMenus`,
 `offscreen`. The extension injects nothing into web pages.
@@ -315,11 +339,21 @@ The cells marked "—" are filled in once the prompts have been read on real Chr
   weather and a calendar tool were built and then removed for exactly this reason: neither
   was worth spending that sentence on. `tests/specs/22-widgets.spec.js` asserts it with
   every tool on screen, so the promise fails a test rather than quietly rotting.
-- **Bookmarks are read, not collected.** With the bookmarks layout granted, the extension
-  reads your bookmark tree to draw the list and does nothing else with it: it is never
-  copied into the extension's own storage, and — like everything else here — never sent
-  anywhere. Revoke the permission in `chrome://extensions` and the column goes straight
-  back to asking for it.
+- **Bookmarks are read, not collected, and changed only when you act.** With the bookmarks
+  layout granted, the extension reads your bookmark tree to draw the list. It changes your
+  bookmarks only when you press a button or act on a row: the new bookmark of the
+  *Bookmark this tab* button, a folder you create (the name you type, or "New folder"), a name you change, and the
+  place you move a row to. It never deletes a bookmark or a folder. It never copies the
+  tree into the extension's own storage (only the ids of the open folders and of the folder the
+  add button aims at, and the scroll position, are remembered, until the browser closes) and — like everything else here —
+  never sends any of it anywhere.
+  For the hover preview it does one more thing with a bookmark's address: it looks that
+  address up in the preview cache (the IndexedDB database the tab cards read) to show the
+  stored screenshot, and it marks the stored screenshots of the bookmarks on screen as
+  recently used, which keeps them from being cleaned up as old and unused. That changes only
+  a preview that already exists, never takes a new one, and is not done in a private window
+  or for a site on your exclusion list. Revoke the permission in `chrome://extensions` and
+  the column goes straight back to asking for it.
 - **Incognito tabs are never captured**, whatever the settings say.
 - `chrome://` pages, the Chrome Web Store, other extensions' pages, `data:` and `about:blank`
   are never captured — Chrome does not allow it.

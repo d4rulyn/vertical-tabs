@@ -7,16 +7,21 @@ be checkable against the code, because a reviewer can read it.
 **Single purpose**: show, in the side panel, the lists a user opens a page from — the
 browser's open tabs as a vertical list with a preview image of each page and the controls
 to manage them, and, in the column beside it, the user's saved bookmarks when they choose
-that layout, as a list to browse, to open from, and to add the current tab to.
+that layout, as a list to browse, to open from, to add the current tab to, and to organise:
+create folders, rename, reorder and move bookmarks and folders.
 
 **単一用途（参考訳）**: ブラウザで開いているタブを、ページのプレビュー画像と操作を添えた
 縦一列のリストとしてサイドパネルに表示し、その横の列には、ユーザーがそのレイアウトを
-選んだときだけ、保存したブックマークを、たどって開いたり現在のタブを追加したりできる
-一覧として表示する — 次に開くページを選ぶための場所です。
+選んだときだけ、保存したブックマークを、たどって開いたり、現在のタブを追加したり、
+フォルダの作成・名前の変更・並べ替え・移動で整理したりできる一覧として表示する —
+次に開くページを選ぶための場所です。
 
 > This sentence was widened for the bookmarks update. It used to name only the tab list,
 > and a bookmarks permission does not follow from that. See `resubmission-note.md` in this
-> directory for what that means for the review.
+> directory for what that means for the review. It was widened a second time for 1.3.0, by
+> the clause "and to organise: create folders, rename, reorder and move bookmarks and
+> folders", which is the whole of what the 1.3.0 column adds. Deleting, searching and
+> editing a bookmark's address are not in it, because the column does none of them.
 
 ---
 
@@ -53,12 +58,21 @@ Supporting facts a reviewer can verify:
 > `chrome.permissions.contains({permissions:['bookmarks']})` is `false`. The column beside
 > the tab list shows the tab tools by default (`settings.railMode` is `'tools'`).
 > Switching it to bookmarks draws a card explaining what the permission is for and a
-> button to grant it; `chrome.permissions.request` is the first statement of that button's
-> click handler, in the panel document, because Chrome requires a user gesture. Once
-> granted, the extension **reads** the tree to draw the list — `chrome.bookmarks.get` and
-> `getChildren`, one folder at a time — and **writes** in exactly one place:
-> the "bookmark this tab" button, which calls `chrome.bookmarks.create` with the current
-> tab's URL and title. There is no rename, no delete, no move and no drag-and-drop.
+> button to grant it; the button's click handler calls `askForPermission()` synchronously
+> and `chrome.permissions.request` is the first statement of that function, in the panel
+> document, because Chrome requires a user gesture. Once
+> granted, the extension **reads** the tree to draw the list — `chrome.bookmarks.getChildren`,
+> one folder at a time, and `get` to look at a node before a write needs it — and **writes**
+> only when the user presses a button or acts on a row they are looking at: the "bookmark
+> this tab" button and a new folder (`chrome.bookmarks.create`, with the current tab's URL
+> and title, or with the folder title in the name field: what the user typed, or the
+> default "New folder" if Enter is pressed on it untouched); a rename, from F2
+> or the row menu (`update`, the title only); and a move (`move`): inside a folder by
+> dragging the row, by the row menu's Move up / Move down, or by Alt+ArrowUp /
+> Alt+ArrowDown, and into another folder by dragging the row there or by the row menu's
+> Move to…, which puts it at the end of the folder chosen. There is no delete,
+> no search and no edit of an address, and no drag-and-drop between the bookmark list and
+> the tab list.
 > Nothing read is sent anywhere, because the extension makes no network requests at all.
 > The user can revoke it from `chrome://extensions` at any time; the extension listens on
 > `chrome.permissions.onRemoved` and the column returns to the grant card.
@@ -69,13 +83,23 @@ Supporting facts a reviewer can verify:
 - Every call goes through one wrapper, `bm()` in `sidepanel/bookmarks.js`, which reaches
   the API by computed member access (`chrome.bookmarks[method](...)`) so that the revoke
   backstop sits in one place. A grep for `chrome.bookmarks.` therefore returns only the
-  five event registrations, and neither proves nor disproves anything about the methods.
-  What to read instead is `grep -n "bm('" extension/sidepanel/bookmarks.js`: six call
-  sites, using `getChildren`, `get` and `create`, and `create` is the only one that
-  mutates. There is no `remove`, `removeTree`, `update`, `move` or `search`.
-- `grep -rn "bookmarks" extension/background/` returns nothing. Every bookmark call and
-  every bookmark listener lives in the panel document, which is where Chrome will accept
-  a permission request and where a listener can be registered after a grant.
+  five event registrations and two comments, and neither proves nor disproves anything
+  about the methods.
+  What to read instead is `grep -rn "bm('" extension/`: the call sites are `getChildren`
+  and `create` in `sidepanel/bookmarks.js`, and `get`, `getChildren`, `create`, `update`
+  and `move` in `sidepanel/bookmark-write.js`, plus one line of prose in that file's header
+  comment. The set of names is exactly `{getChildren, get, create, update, move}`, and
+  `tests/unit/bookmark-claims.test.mjs` reads the source and fails if any other name
+  appears. `create`, `update` and `move` mutate. There is no `remove`, `removeTree`,
+  `search`, `getTree`, `getRecent` or `getSubTree`. (For the 1.2.0 package, whose only
+  call sites were `getChildren` and `create`, see `resubmission-note.md`.)
+- `grep -rn "bookmarks" extension/background/` returns two lines, both in
+  `service-worker.js`: a doc comment and the string comparison `name !== 'bookmarks'`,
+  which only stops pressing Allow on the bookmarks card from triggering a preview re-scan.
+  The worker never calls `chrome.bookmarks`. (Corrected 2026-11-04: this said "returns
+  nothing".) Every bookmark call and every bookmark listener lives in the panel document,
+  which is where Chrome will accept a permission request and where a listener can be
+  registered after a grant.
 - The code never gates on `if (chrome.bookmarks)`. After a revoke that object stays alive
   and throws on use, so the gate is `await chrome.permissions.contains(...)`.
 - `chrome.bookmarks.getTree` is never called: it reads the whole tree at once (measured at
@@ -112,7 +136,7 @@ Supporting facts a reviewer can verify:
 
 > `storage` holds the user's settings and small pieces of panel state — which tools the
 > column shows, whether that column is showing tools or bookmarks, and which bookmark
-> folder it was left in. `unlimitedStorage` applies to the preview cache in IndexedDB:
+> folders were open (ids, not titles). `unlimitedStorage` applies to the preview cache in IndexedDB:
 > screenshots are larger than the default quota comfortably allows, and without it Chrome
 > may evict the cache, which shows up to the user as previews disappearing for no reason.
 > Nothing is stored anywhere but locally.
@@ -153,11 +177,13 @@ The extension collects nothing, transmits nothing, and has no server. Screenshot
 settings and notes stay in the profile's own storage and are deleted with the extension.
 
 Bookmarks do not change that answer. They are read out of Chrome and drawn on screen; no
-bookmark title or URL is copied into the extension's own storage or anywhere else. The one
-thing kept is the id of the folder the column was left in, in `chrome.storage.session`, so
-reopening the panel returns the reader to where they were; it dies with the browser. The
-one write goes back into Chrome's bookmark tree, where the user can see it. Nothing leaves
-the device, so there is nothing to declare as collected.
+bookmark title or URL is copied into the extension's own storage or anywhere else. What is
+kept is the ids of the open folders, the id of the folder the add button aims at, and the
+scroll offset (ids and a number, no titles or URLs), in `chrome.storage.session`, so
+reopening the panel returns the reader to where they were; it dies with the browser. Every
+write goes back into Chrome's bookmark tree, where the user can see it: the bookmark a
+button adds, a folder the user creates (typed name, or the default "New folder"), a name the user changes, the place a row is moved
+to. Nothing leaves the device, so there is nothing to declare as collected.
 
 ---
 
@@ -169,7 +195,7 @@ versions of the sections above. Every character count is under the cap.
 ### 単一用途 (Single purpose)
 
 ```
-Show, in the side panel, the lists a user opens a page from: the browser's open tabs as a vertical list with a preview image of each page and the controls to manage them, and, in the column beside it, the user's saved bookmarks when they choose that layout, as a list to browse, to open from, and to add the current tab to.
+Show, in the side panel, the lists a user opens a page from: the browser's open tabs as a vertical list with a preview image of each page and the controls to manage them, and, in the column beside it, the user's saved bookmarks when they choose that layout, as a list to browse, to open from, to add the current tab to, and to organise: create folders, rename, reorder and move bookmarks and folders.
 ```
 
 ### ホスト権限 が必要な理由 (host_permissions: <all_urls>)
@@ -189,11 +215,11 @@ The optional bookmarks column does not use host access at all.
 ```
 Optional: declared in optional_permissions, not permissions, and never requested at install. Ungranted, chrome.bookmarks is undefined and nothing changes.
 
-The column beside the tab list shows tab tools by default. Switching it to bookmarks draws a card explaining the permission and a grant button; chrome.permissions.request is that handler's first statement, in the panel document.
+The column shows tab tools by default. Switching it to bookmarks draws a card and a grant button; the click handler calls askForPermission(), whose first statement is chrome.permissions.request.
 
-Granted, it reads one folder at a time to draw the list; getTree and search are never called. It writes in one place: the "bookmark this tab" button, which calls chrome.bookmarks.create with the current tab's URL and title. No rename, no delete, no move, no drag-and-drop. Every call goes through one wrapper, bm() in sidepanel/bookmarks.js: grep "bm('" there for all six call sites, using getChildren, get and create only.
+Granted, it reads one folder at a time. It writes only on a button press or a row action: "bookmark this tab" and a new folder, typed or default name (create), a rename (update, title only), a move (move) by drag, the menu's Move up/down/to, or Alt+Arrow. No delete, no search, no edit of an address, no getTree. Every call goes through one wrapper, bm() in bookmarks.js: grep -rn "bm('" extension/ lists them; the names are exactly getChildren, get, create, update, move.
 
-Nothing read is sent anywhere; the extension makes no network requests. A revoke in chrome://extensions is watched by chrome.permissions.onRemoved, and the column returns to the card.
+Nothing is sent anywhere: no network requests. A revoke in chrome://extensions is watched by chrome.permissions.onRemoved, and the column returns to the card.
 ```
 
 ### scripting
@@ -225,7 +251,7 @@ The panel shows a list of recently closed tabs and restores them, using chrome.s
 ### storage / unlimitedStorage
 
 ```
-storage holds the user's settings and small pieces of panel state: which tools the side column shows, whether that column is showing tools or bookmarks, and which bookmark folder it was left in. unlimitedStorage applies to the preview cache in IndexedDB: screenshots are larger than the default quota comfortably allows, and without it Chrome may evict the cache, which the user sees as previews disappearing for no reason. Nothing is stored anywhere but locally.
+storage holds the user's settings and small pieces of panel state: which tools the side column shows, whether that column is showing tools or bookmarks, and which bookmark folders were open (ids, not titles). unlimitedStorage applies to the preview cache in IndexedDB: screenshots are larger than the default quota comfortably allows, and without it Chrome may evict the cache, which the user sees as previews disappearing for no reason. Nothing is stored anywhere but locally.
 ```
 
 ### favicon

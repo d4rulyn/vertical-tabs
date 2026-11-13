@@ -271,6 +271,29 @@ export const PRUNE = {
   maxAgeMs: 14 * 86400e3,
 };
 
+/**
+ * How close to `now` a stored `lastUsedAt` has to be for `thumb-store.touch()` to leave the record
+ * alone (spec-addendum A40; the measurements are Probe 18 in .agent/probe-results.md).
+ *
+ * Rewriting a record rewrites its screenshot, and with a thousand bookmark rows one touch is a thousand
+ * rewrites. `prune()` only reads stamps that are days old, so a row that is shown again within this time
+ * does not need a new one. The callers touch on events and keep 30 s between two touches of their own
+ * (`TOUCH_DISPLAYED_INTERVAL_MS`); a row that stays on screen is rewritten at most once per this time
+ * instead of at every touch.
+ *
+ * What it costs: a row last shown at t can carry a stamp up to this much, and one 30 s cadence, older than
+ * t. For such a row the age rule of `PRUNE.maxAgeMs` is 14 d - TOUCH_FRESH_MS - 30 s, which at 6 h leaves
+ * 13.75 days (a loss of under 2 %), and the oldest-first order in which `prune()` evicts under `maxEntries`
+ * and `maxBytes` is fuzzy within this window.
+ *
+ * Why 6 h and not less: one touch stamps every row on screen with the same `now`, so they all go stale
+ * together and the next touch after that moment rewrites all of them in one transaction (also at each panel
+ * boot after a gap this long). That burst can happen at most 24 h / X times a day of continuous use: four
+ * at 6 h, twenty-four at 1 h. Why not more: the loss above is X / 14 d, and a day would cost over 7 %.
+ * The bounds are 30 minutes (below that nothing is saved) and one day.
+ */
+export const TOUCH_FRESH_MS = 6 * 60 * 60e3;
+
 /** `chrome.storage.local` keys (spec §5.2). */
 export const STORAGE_LOCAL = {
   /** Named tab sets the user saved on purpose (sessions widget). */
