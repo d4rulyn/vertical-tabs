@@ -2,6 +2,8 @@
 
 *[English version](README.md)*
 
+**ウェブサイト:** [vertical-tabs.d4rulyn.com](https://vertical-tabs.d4rulyn.com/) ・ **[Chrome ウェブストア](https://chromewebstore.google.com/detail/vertical-tabs/ofajdfikeepefnogjblgcecnmopanaak)**
+
 Chrome のサイドパネルに **縦型のタブ一覧をページプレビュー付きで**表示する Chrome 拡張機能
 （Manifest V3）です。現在のウィンドウのタブが 1 枚ずつカードになり、favicon・タイトルに加えてページ
 上部を切り取ったスクリーンショットが表示されるので、短く切り詰められたタイトルではなく「見た目」で
@@ -119,7 +121,7 @@ Chrome のサイドパネルに **縦型のタブ一覧をページプレビュ�
 > **別のマシンに入れるなら** → **[導入手順](https://d4rulyn.github.io/vertical-tabs/install.html)**（ブラウザで開けます）。
 > 最新の zip は [Releases](../../releases/latest) にあります:
 > ```
-> gh release download v1.0.0 --repo d4rulyn/vertical-tabs --pattern '*.zip'
+> gh release download --repo d4rulyn/vertical-tabs --pattern '*.zip'
 > ```
 > zip の作り方、読み込み、プレビューに必須の権限設定、更新のしかた、つまずいたときまで一枚にまとめてあります。
 >
@@ -131,7 +133,7 @@ Chrome のサイドパネルに **縦型のタブ一覧をページプレビュ�
 > `dist/vertical-tabs-<版>.zip` ができます。同じコミットからは常に同じバイト列になります。
 
 
-Chrome ウェブストアでは配布していないため、ローカルから読み込みます。
+ローカルから読み込む手順です。
 
 1. このリポジトリを clone するかダウンロードします。
 2. `chrome://extensions` を開きます。

@@ -2,6 +2,8 @@
 
 *[日本語版 / Japanese](README.ja.md)*
 
+**Website:** [vertical-tabs.d4rulyn.com](https://vertical-tabs.d4rulyn.com/) · **[Chrome Web Store](https://chromewebstore.google.com/detail/vertical-tabs/ofajdfikeepefnogjblgcecnmopanaak)**
+
 A Chrome extension (Manifest V3) that puts a **vertical tab list with page previews** into
 Chrome's side panel. Every tab of the current window becomes a card with a
 favicon, a title and a top-cropped screenshot of the page, so you can recognise a tab by how
@@ -131,7 +133,7 @@ To load it by hand, or to run a development build:
 
 > **Setting this up on another machine?** → the zip is on [Releases](../../releases/latest):
 > ```
-> gh release download v1.0.0 --repo d4rulyn/vertical-tabs --pattern '*.zip'
+> gh release download --repo d4rulyn/vertical-tabs --pattern '*.zip'
 > ```
 > The walkthrough is **[the install guide](https://d4rulyn.github.io/vertical-tabs/install.html)**, a
 > single page you open in a browser: building the zip, loading it, the permission the
@@ -145,7 +147,7 @@ To load it by hand, or to run a development build:
 > It writes `dist/vertical-tabs-<version>.zip`, byte-identical for a given commit.
 
 
-The extension is not on the Chrome Web Store; load it from disk.
+To load it from disk:
 
 1. Clone or download this repository.
 2. Open `chrome://extensions`.
